@@ -195,7 +195,7 @@ export default function StorePreview() {
             </div>
             <iframe 
               id="store-preview-iframe"
-              src={window.location.hostname.includes('onrender.com') ? `https://lg-ai-commerce.pages.dev/${locale}/${categoryId ? 'products?categoryId=' + categoryId : ''}` : `http://localhost:4321/${locale}/${categoryId ? 'products?categoryId=' + categoryId : ''}`}
+              src={`${import.meta.env.VITE_STOREFRONT_URL || (window.location.hostname.includes('onrender.com') ? 'https://lg-ai-commerce.jeongbo83.workers.dev' : 'http://localhost:4321')}/${locale}/${categoryId ? 'products?categoryId=' + categoryId : ''}`}
               title="Store Preview"
               style={{ width: '100%', flex: 1, border: 'none', background: '#fff' }}
             />
