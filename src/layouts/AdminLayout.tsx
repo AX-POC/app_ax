@@ -69,7 +69,7 @@ export default function AdminLayout() {
                 </clipPath>
               </defs>
             </svg>
-            <h1 style={{ margin: 0, paddingBottom: 0, fontSize: 'clamp(1rem, 2.5vw, 1.5rem)', whiteSpace: 'nowrap' }}>OBS Global Admin</h1>
+            <h1 style={{ margin: 0, paddingBottom: 0, fontSize: 'clamp(1rem, 2.5vw, 1.5rem)', whiteSpace: 'nowrap' }}>Global Admin</h1>
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
             <select

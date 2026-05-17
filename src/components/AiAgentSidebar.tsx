@@ -9,39 +9,30 @@ const agents = [
     name: 'Promotion Agent',
     desc: 'Handles campaigns, coupons, and discounts.',
     avatar: '/agents/promo_animal.png',
-    suggestions: ['Create coupon', 'Create PTO model', 'Start pre-order']
+    suggestions: ['Create coupon', 'Start pre-order']
   },
   {
     id: 'product',
     name: 'Product Agent',
     desc: 'Manages catalog, inventory, and listings.',
     avatar: '/agents/product_animal.png',
+    suggestions: ['Create PTO model']
   },
   {
     id: 'order',
     name: 'Order Agent',
     desc: 'Tracks fulfillment and delivery workflows.',
     avatar: '/agents/order_agent_latest.png',
+    suggestions: ['Find order ORD-BYUH3FDH', 'Search customer hsleelee@example.com', 'Go to Order List']
   },
   {
     id: 'rollout',
     name: 'Rollout Agent',
     desc: 'Instantly spins up new global storefronts.',
-    avatar: '/agents/rollout_animal.png',
+    avatar: '/agents/rollout_lop_rabbit.png',
     suggestions: ['스페인 사이트 열어줘', 'Deploy UK Store']
   },
-  {
-    id: 'support',
-    name: 'General Support Agent',
-    desc: 'Not sure what to click? Ask me anything here!',
-    avatar: '/agents/support_agent_new.png',
-  },
-  {
-    id: 'leetest',
-    name: 'LEETEST Agent',
-    desc: 'LEETEST 테스트용 에이전트입니다.',
-    avatar: '/agents/support_agent_new.png',
-  },
+
   {
     id: 'security',
     name: 'Security Agent',
@@ -198,6 +189,7 @@ export default function AiAgentSidebar() {
   const [view, setView] = useState<'dashboard' | 'chat'>('dashboard');
   const [activeAgent, setActiveAgent] = useState<any>(null);
   const [activePromotions, setActivePromotions] = useState<any[]>([]);
+  const [lastProcessedLogId, setLastProcessedLogId] = useState<string | null>(null);
   const navigate = useNavigate();
   
   
@@ -259,9 +251,74 @@ export default function AiAgentSidebar() {
     product: '/products',
     order: '/orders',
     rollout: '/stores',
-    support: '/',
     security: '/security',
   };
+
+  // Poll for Security Threats
+  const isFirstPoll = useRef(true);
+
+  useEffect(() => {
+    let polling = true;
+    const checkSecurityState = async () => {
+      if (!polling) return;
+      try {
+        const res = await fetch(`/api/security/state?t=${Date.now()}`, { cache: 'no-store' });
+        if (res.ok) {
+          const state = await res.json();
+          if (state.logs && state.logs.length > 0) {
+            const latestLog = state.logs[state.logs.length - 1];
+            
+            // 페이지 첫 로드 시에는 기존 로그에 반응하지 않고 최신 ID만 기억합니다.
+            if (isFirstPoll.current) {
+              isFirstPoll.current = false;
+              setLastProcessedLogId(latestLog.id);
+            } 
+            // 새롭게 발생한 심각한 위협 감지 (RESOLVED가 아닌 경우)
+            else if (latestLog.status !== 'RESOLVED' && (latestLog.severity === 'HIGH' || latestLog.severity === 'CRITICAL') && latestLog.id !== lastProcessedLogId) {
+              setLastProcessedLogId(latestLog.id);
+              
+              // 1. 보안 대시보드 화면으로 강제 이동 및 사이드바 오픈
+              navigate('/security');
+              setIsOpen(true);
+              
+              const secAgent = agents.find(a => a.id === 'security');
+              if (secAgent) {
+                setActiveAgent(secAgent);
+                setView('chat');
+                
+                // 2. 공격 탐지 메시지 출력
+                setMessages([
+                  { role: 'agent', type: 'text', content: `🔴 **CRITICAL ALERT:**\nAnomaly detected! A massive spike in malicious traffic (${latestLog.type}) is hitting the endpoints from multiple IP ranges.` }
+                ]);
+                
+                // 처리 중(애니메이션 효과)를 위해 타이핑 인디케이터 켬
+                setTimeout(() => setIsTyping(true), 1000);
+                
+                // 3. 자율 방어 조치 메시지 및 종결 처리 (10초 후)
+                setTimeout(async () => {
+                  setIsTyping(false);
+                  setMessages(prev => [...prev, { role: 'agent', type: 'text', content: `⚡ **Autonomous Defense Triggered:**\nI have automatically routed the traffic through the scrubbing center and blacklisted the offending subnets. The attack has been neutralized without system downtime.` }]);
+                  
+                  try {
+                    await fetch('/api/security/resolve', { method: 'POST' });
+                  } catch(e) {}
+                }, 10000);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+      if (polling) {
+        setTimeout(checkSecurityState, 2000);
+      }
+    };
+    
+    checkSecurityState();
+    return () => { polling = false; };
+  }, [lastProcessedLogId, navigate]);
+
 
   const handleSelectAgent = (agent: any) => {
     // 우측 대시보드를 에이전트에 맞는 Admin 페이지로 이동
@@ -278,9 +335,15 @@ export default function AiAgentSidebar() {
         { role: 'agent', type: 'text', content: `🛡️ Security Guardian activated.\nI am monitoring your store in real-time. The Security Dashboard is now displayed on the right panel.\n\nAvailable commands:\n• "Run DDoS simulation"\n• "Scan for SQL injection"\n• "Generate security report"\n• "Show current threat level"` }
       ]);
     } else {
-      setMessages([
+      const initialMsgs: any[] = [
         { role: 'agent', type: 'text', content: `Welcome! I am your ${agent.name}. How can I help you manage the store today?` }
-      ]);
+      ];
+      
+      if (agent.suggestions && agent.suggestions.length > 0) {
+        initialMsgs.push({ role: 'agent', type: 'suggestions_group', suggestions: agent.suggestions });
+      }
+      
+      setMessages(initialMsgs);
     }
   };
 
@@ -313,7 +376,7 @@ export default function AiAgentSidebar() {
     };
   }, [isDragging]);
 
-  const COMMERCE_API = 'http://localhost:4321';
+  const COMMERCE_API = '';
 
   const submitMessage = async (text: string) => {
     if (!text.trim()) return;
@@ -322,34 +385,41 @@ export default function AiAgentSidebar() {
     setInputText('');
     setIsTyping(true);
 
+    // Instant navigation for PTO flow
+    if (activeAgent?.id === 'product' && (text.toLowerCase().includes('pto') || text.toLowerCase().includes('pick to order') || text.toLowerCase().includes('create pto model'))) {
+      if (window.location.pathname !== '/preview') {
+         navigate('/preview');
+      }
+    }
+
     // Security Agent 명령 처리
     if (activeAgent?.id === 'security') {
       const lower = text.toLowerCase();
       try {
         if (lower.includes('ddos')) {
-          await fetch(`${COMMERCE_API}/api/security`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'simulate', type: 'DDOS' }) });
-          const res = await fetch(`${COMMERCE_API}/api/security?action=status`);
+          await fetch(`${COMMERCE_API}/api/security/simulate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'DDOS' }) });
+          const res = await fetch(`${COMMERCE_API}/api/security/state`);
           const state = await res.json();
           setTimeout(() => { setIsTyping(false); setMessages(prev => [...prev, { role: 'agent', type: 'text', content: `🌊 DDoS attack simulation executed.\n\n🔴 Threat Level: ${state.level}\n⚡ Active Threats: ${state.activeThreats}\n🛡️ Blocked Today: ${state.blockedToday}\n📊 Total Scanned: ${state.totalScanned.toLocaleString()}\n\nThe Security Dashboard on the right has been updated in real-time.` }]); }, 800);
         } else if (lower.includes('sql')) {
-          await fetch(`${COMMERCE_API}/api/security`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'simulate', type: 'SQL_INJECTION' }) });
-          const res = await fetch(`${COMMERCE_API}/api/security?action=status`);
+          await fetch(`${COMMERCE_API}/api/security/simulate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'SQL_INJECTION' }) });
+          const res = await fetch(`${COMMERCE_API}/api/security/state`);
           const state = await res.json();
           setTimeout(() => { setIsTyping(false); setMessages(prev => [...prev, { role: 'agent', type: 'text', content: `💉 SQL Injection attack simulation executed.\n\n🔴 Threat Level: ${state.level}\n⚡ Active Threats: ${state.activeThreats}\n🛡️ Blocked Today: ${state.blockedToday}\n\nInjection attempt has been intercepted and logged.` }]); }, 800);
         } else if (lower.includes('brute')) {
-          await fetch(`${COMMERCE_API}/api/security`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'simulate', type: 'BRUTE_FORCE' }) });
-          const res = await fetch(`${COMMERCE_API}/api/security?action=status`);
+          await fetch(`${COMMERCE_API}/api/security/simulate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'BRUTE_FORCE' }) });
+          const res = await fetch(`${COMMERCE_API}/api/security/state`);
           const state = await res.json();
           setTimeout(() => { setIsTyping(false); setMessages(prev => [...prev, { role: 'agent', type: 'text', content: `🔓 Brute Force attack simulation executed.\n\n🔴 Threat Level: ${state.level}\n⚡ Active Threats: ${state.activeThreats}\n🛡️ Blocked Today: ${state.blockedToday}\n\nSuspicious login attempts have been blocked.` }]); }, 800);
         } else if (lower.includes('price') || lower.includes('가격')) {
-          await fetch(`${COMMERCE_API}/api/security`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'simulate', type: 'PRICE_MANIPULATION' }) });
-          const res = await fetch(`${COMMERCE_API}/api/security?action=status`);
+          await fetch(`${COMMERCE_API}/api/security/simulate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'PRICE_MANIPULATION' }) });
+          const res = await fetch(`${COMMERCE_API}/api/security/state`);
           const state = await res.json();
           setTimeout(() => { setIsTyping(false); setMessages(prev => [...prev, { role: 'agent', type: 'text', content: `💰 Price Manipulation attack simulation executed.\n\n🔴 Threat Level: ${state.level}\n🛡️ Blocked Today: ${state.blockedToday}\n\nPrice tampering attempt detected and neutralized.` }]); }, 800);
         } else if (lower.includes('full') || lower.includes('all') || lower.includes('전체')) {
-          await fetch(`${COMMERCE_API}/api/security`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'simulate_all' }) });
+          await fetch(`${COMMERCE_API}/api/security/simulate-all`, { method: 'POST' });
           setTimeout(async () => {
-            const res = await fetch(`${COMMERCE_API}/api/security?action=status`);
+            const res = await fetch(`${COMMERCE_API}/api/security/state`);
             const state = await res.json();
             setIsTyping(false);
             setMessages(prev => [...prev, { role: 'agent', type: 'text', content: `🚨 Full Attack Scenario executed!\n\n🔴 Threat Level: ${state.level}\n⚡ Active Threats: ${state.activeThreats}\n🛡️ Blocked Today: ${state.blockedToday}\n📊 Total Scanned: ${state.totalScanned.toLocaleString()}\n📋 Total Logs: ${state.logs.length}\n\nAll attack vectors have been simulated. Check the dashboard for details.` }]);
@@ -361,19 +431,19 @@ export default function AiAgentSidebar() {
           setReportLoading(true);
           setShowReportModal(true);
           // 상태 먼저 수집
-          const statusRes = await fetch(`${COMMERCE_API}/api/security?action=status`);
+          const statusRes = await fetch(`${COMMERCE_API}/api/security/state`);
           const statusData = await statusRes.json();
           setReportMeta(statusData);
           // AI 보고서 생성
-          const res = await fetch(`${COMMERCE_API}/api/security`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'report' }) });
+          const res = await fetch(`${COMMERCE_API}/api/security/report`, { method: 'GET' });
           const data = await res.json();
           setReportContent(data.report || 'No threats detected. System is operating normally.');
           setReportLoading(false);
         } else if (lower.includes('clear') || lower.includes('초기화') || lower.includes('reset')) {
-          await fetch(`${COMMERCE_API}/api/security`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clear' }) });
+          await fetch(`${COMMERCE_API}/api/security/logs`, { method: 'DELETE' });
           setTimeout(() => { setIsTyping(false); setMessages(prev => [...prev, { role: 'agent', type: 'text', content: `🗑️ Security logs cleared. System reset to SAFE status.\n\nAll threat data has been purged. Dashboard is now clean.` }]); }, 500);
         } else if (lower.includes('status') || lower.includes('level') || lower.includes('상태') || lower.includes('threat')) {
-          const res = await fetch(`${COMMERCE_API}/api/security?action=status`);
+          const res = await fetch(`${COMMERCE_API}/api/security/state`);
           const state = await res.json();
           setTimeout(() => { setIsTyping(false); setMessages(prev => [...prev, { role: 'agent', type: 'text', content: `🛡️ Current Security Status:\n\n• Threat Level: ${state.level}\n• Active Threats: ${state.activeThreats}\n• Blocked Today: ${state.blockedToday}\n• Total Scanned: ${state.totalScanned.toLocaleString()}\n• Event Logs: ${state.logs.length} entries\n• Last Updated: ${new Date(state.lastUpdated).toLocaleTimeString('ko-KR')}` }]); }, 500);
         } else {
@@ -390,13 +460,56 @@ export default function AiAgentSidebar() {
         }
       } catch (err) {
         setIsTyping(false);
-        setMessages(prev => [...prev, { role: 'agent', type: 'text', content: '⚠️ Failed to connect to Security Engine. Make sure the Commerce server (localhost:4321) is running.' }]);
+        setReportLoading(false);
+        setMessages(prev => [...prev, { role: 'agent', type: 'text', content: '⚠️ Failed to connect to Security Engine. Please check your network connection.' }]);
       }
       return;
     }
 
 
-    // Removed hardcoded '스페인' mock to let Gemini API handle it
+    // Natural Language local parser for promotion coupon creation
+    if (activeAgent?.id === 'promotion') {
+      const lower = text.toLowerCase();
+      
+      // Flexible parsing: check if it's asking for a coupon and specifies a percentage
+      if (lower.includes('coupon') && /\d+%/.test(lower)) {
+        const rateMatch = lower.match(/(\d+)%/);
+        const rate = rateMatch ? parseInt(rateMatch[1], 10) : 10;
+        
+        let target = 'All Products';
+        if (lower.includes('tv')) target = 'All TV';
+        else if (lower.includes('soundbar')) target = 'All Soundbar';
+        else if (lower.includes('ref')) target = 'All Refrigerator';
+        else if (lower.includes('sku')) target = 'Specific SKU';
+        
+        let audience = 'ALL';
+        if (lower.includes('d2c')) audience = 'D2C';
+        else if (lower.includes('guest')) audience = 'GUEST';
+        else if (lower.includes('d2b2c')) audience = 'D2B2C';
+        else if (lower.includes('d2e')) audience = 'D2E';
+
+        const promoDetails = {
+          discountType: 'PERCENT',
+          rate: rate,
+          target: target,
+          audience: audience,
+          sku: '',
+          startDate: new Date().toISOString().split('T')[0],
+          endDate: new Date(Date.now() + 86400000*30).toISOString().split('T')[0]
+        };
+
+        setTimeout(() => {
+          setIsTyping(false);
+          setMessages(prev => [...prev, {
+            role: 'agent',
+            type: 'action',
+            content: `I've understood your request! You want to create a ${rate}% discount for ${audience} targeting ${target}. Is this correct? You can preview and deploy below.`,
+            actionDetails: { type: 'PROMOTION', ...promoDetails }
+          }]);
+        }, 800);
+        return; // Exit here, do not call Gemini API
+      }
+    }
 
     try {
       const response = await fetch('/api/agent/chat', { 
@@ -435,6 +548,14 @@ export default function AiAgentSidebar() {
           content: data.text,
           actionDetails: data.actionDetails || data.action
         }]);
+        
+        if (data.type === 'action' && data.action) {
+          if (data.action.type === 'NAVIGATE') {
+            setTimeout(() => navigate(data.action.payload), 1000);
+          } else if (data.action.type === 'REFRESH_DATA') {
+            setTimeout(() => window.location.reload(), 1500);
+          }
+        }
       }
     } catch (err) {
       console.error("AI Fetch Error:", err);
@@ -662,7 +783,7 @@ export default function AiAgentSidebar() {
       <div className={`ai-sidebar-container ${isOpen ? 'open' : ''}`}>
         <div className="ai-header">
         <div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--lg-black)' }}>LG OBS AI Agent</h2>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--lg-black)' }}>LG AI Agents</h2>
         </div>
         <button onClick={() => setIsOpen(!isOpen)} style={{ border:'none', background:'transparent', fontSize:'1.2rem', cursor:'pointer' }}>
           ✕
@@ -672,7 +793,7 @@ export default function AiAgentSidebar() {
       {view === 'dashboard' ? (
         <div className="ai-view-content">
           <p style={{marginBottom:'24px', fontWeight:500, lineHeight: '1.5', color: '#475569', fontSize: '0.95rem'}}>
-            <strong style={{color: '#1e293b', fontSize: '1.05rem'}}>Welcome to LG OBS Admin!</strong><br/>
+            <strong style={{color: '#1e293b', fontSize: '1.05rem'}}>Welcome to LG Commerce Admin!</strong><br/>
             Our AI Agents will help you explore and configure your site in the blink of an eye.<br/>
             <span style={{fontWeight: 700, color: 'var(--accent)', display: 'inline-block', marginTop: '10px'}}>Select an agent to start working:</span>
           </p>
@@ -715,7 +836,7 @@ export default function AiAgentSidebar() {
                       }
                     ]);
                   }}
-                  style={{ position: 'relative', cursor: 'pointer', padding: '12px', background: '#ffebeb', borderRadius: '50%', color: 'var(--lg-red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  style={{ position: 'relative', cursor: 'pointer', padding: '12px', background: '#e9ecef', borderRadius: '50%', color: '#495057', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   title="New Insight Available"
                 >
                   <span style={{ fontSize: '1.2rem' }}>🔔</span>
@@ -764,7 +885,30 @@ export default function AiAgentSidebar() {
             <div className="chat-history">
               {messages.map((msg, idx) => (
                 <div key={idx} className={`chat-bubble ${msg.role}`}>
-                  {msg.content && <p style={{ whiteSpace: 'pre-wrap', margin: 0, lineHeight: '1.4' }}>{msg.content}</p>}
+                  {msg.content && msg.type !== 'suggestion' && <p style={{ whiteSpace: 'pre-wrap', margin: 0, lineHeight: '1.4' }}>{msg.content}</p>}
+                  
+                  {/* Grouped Suggestions Bubble Type */}
+                  {msg.type === 'suggestions_group' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#6c757d', marginBottom: '2px', fontWeight: 'bold' }}>Quick Actions:</span>
+                      {msg.suggestions.map((sug: string, sIdx: number) => (
+                        <button 
+                          key={sIdx} 
+                          style={{
+                            background: '#fff', border: '1px solid #ced4da', borderRadius: '8px',
+                            padding: '10px 14px', fontSize: '0.85rem', color: '#495057', cursor: 'pointer',
+                            textAlign: 'left', transition: 'all 0.2s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                            display: 'block', width: '100%', outline: 'none'
+                          }}
+                          onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--lg-red)'; e.currentTarget.style.color = 'var(--lg-red)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.05)'; }}
+                          onMouseOut={(e) => { e.currentTarget.style.borderColor = '#ced4da'; e.currentTarget.style.color = '#495057'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)'; }}
+                          onClick={() => submitMessage(sug)}
+                        >
+                          💡 {sug}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   
                   {/* Live Progress Stream Component */}
                   {msg.type === 'progress' && (
@@ -829,7 +973,7 @@ export default function AiAgentSidebar() {
                   )}
 
                   {msg.type === 'form' && msg.formType === 'pto_flow' && (
-                    <PtoCreationForm onSubmit={(bundleName, price, skus, category, images) => {
+                    <PtoCreationForm onSubmit={(bundleName, price, skus, category, images, startDate, endDate) => {
                         setMessages(prev => [...prev, { role: 'user', type: 'text', content: `Create PTO Bundle: [${bundleName}] containing [${skus.join(', ')}] in category [${category}] for $${price}.` }]);
                         setIsTyping(true);
                         setTimeout(() => {
@@ -838,7 +982,7 @@ export default function AiAgentSidebar() {
                              role: 'agent',
                              type: 'action',
                              content: "The dynamic PTO bundle has been configured successfully. Please approve the deployment.",
-                             actionDetails: { type: 'PTO_CREATE', bundleName, price, skus, category, images }
+                             actionDetails: { type: 'PTO_CREATE', bundleName, price, skus, category, images, startDate, endDate }
                            }]);
                         }, 1200);
                     }} />
@@ -974,39 +1118,16 @@ export default function AiAgentSidebar() {
                           setMessages(prev => [...prev, { role: 'agent', type: 'text', content: 'Action cancelled. Let me know if you need anything else.'}]);
                         }}>Reject</button>
                         <button className="action-btn secondary" style={{ background: '#475569', color: 'white', border: 'none' }} onClick={async () => {
-                          navigate('/preview');
-                          setTimeout(() => {
-                            const iframe = document.getElementById('store-preview-iframe') as HTMLIFrameElement;
-                            if (iframe && iframe.contentWindow) {
-                              const targetOrigin = window.location.hostname.includes('onrender.com') ? 'https://lg-ai-commerce.onrender.com' : '*';
-                              iframe.contentWindow.postMessage({
-                                type: 'ai-action-apply',
-                                detail: {
-                                  type: 'PROMOTION',
-                                  promotion: {
-                                    id: 'PREVIEW-DRAFT',
-                                    name: "AI Preview Coupon",
-                                    type: 'COUPON',
-                                    targetScope: msg.actionDetails.target,
-                                    discountValue: msg.actionDetails.rate,
-                                    discountType: msg.actionDetails.discountType || 'PERCENT',
-                                    targetSku: msg.actionDetails.sku || null
-                                  }
-                                }
-                              }, '*');
-                            }
-                          }, 500);
-
                           let categoryId = '';
                           try {
-                            const catRes = await fetch('http://localhost:8080/api/v1/catalog/categories/tree');
-                            if (catRes.ok) {
-                              const catTree = await catRes.json();
+                            const res = await fetch('http://localhost:8080/api/v1/catalog/categories');
+                            if (res.ok) {
+                              const catTree = await res.json();
                               const categories: any[] = [];
-                              const flatten = (nodes: any[]) => {
-                                nodes.forEach(node => {
-                                  categories.push(node);
-                                  if (node.children) flatten(node.children);
+                              const flatten = (arr: any[]) => {
+                                arr.forEach(c => {
+                                  categories.push(c);
+                                  if (c.children) flatten(c.children);
                                 });
                               };
                               flatten(catTree);
@@ -1027,6 +1148,21 @@ export default function AiAgentSidebar() {
                             else if (msg.actionDetails.target === 'All Soundbar') categoryId = '110';
                             else if (msg.actionDetails.target === 'All Refrigerator') categoryId = '76';
                           }
+
+                          localStorage.setItem('pending-ai-promo', JSON.stringify({
+                            type: 'PROMOTION',
+                            promotion: {
+                              id: 'PREVIEW-DRAFT',
+                              name: "AI Preview Coupon",
+                              type: 'COUPON',
+                              targetScope: msg.actionDetails.target,
+                              discountValue: msg.actionDetails.rate,
+                              discountType: msg.actionDetails.discountType || 'PERCENT',
+                              targetSku: msg.actionDetails.sku || null
+                            }
+                          }));
+                          
+                          navigate(`/preview${categoryId ? '?categoryId=' + categoryId : ''}`);
 
                           let affectedCount = 1;
                           if (msg.actionDetails.target === 'Specific SKU') {
@@ -1136,14 +1272,23 @@ export default function AiAgentSidebar() {
                              });
                           });
 
-                          eventSource.addEventListener('complete', () => {
+                          eventSource.addEventListener('complete', (e) => {
                              eventSource.close();
                              triggerConfetti();
+                             let finalLanguage = config.language || config.region;
+                             try {
+                               if (e.data) {
+                                 const payload = JSON.parse(e.data);
+                                 if (payload.finalLanguage) {
+                                   finalLanguage = payload.finalLanguage;
+                                 }
+                               }
+                             } catch (err) {}
                              showCenterSuccessToast(`🎉 ${config.region} Rollout Successfully Completed!`);
                              const successMsg = config.labels?.successMsg?.replace('{0}', config.region) || `🚀 Deployment initiated! The **${config.region}** storefront is now LIVE at `;
                              setMessages(prev => [...prev, 
-                               { role: 'agent', type: 'text', content: `${successMsg}lg.com/${config.region.toLowerCase()}` },
-                               { role: 'agent', type: 'action', actionDetails: { type: 'ASK_PREVIEW', language: config.region } }
+                               { role: 'agent', type: 'text', content: `${successMsg}lg.com/${finalLanguage.toLowerCase()}` },
+                               { role: 'agent', type: 'action', actionDetails: { type: 'ASK_PREVIEW', language: finalLanguage } }
                              ]);
                           });
 
@@ -1221,19 +1366,49 @@ export default function AiAgentSidebar() {
                                 bundlePrice: msg.actionDetails.price, 
                                 bundleCategory: msg.actionDetails.category, 
                                 bundleSkus: msg.actionDetails.skus?.join(','), 
-                                bundleImages: msg.actionDetails.images?.join(',') 
+                                bundleImages: msg.actionDetails.images?.join(','),
+                                startDate: msg.actionDetails.startDate,
+                                endDate: msg.actionDetails.endDate
                               })
                             });
                             const newPto = await res.json();
                             dispatchAiAction({...msg.actionDetails, id: newPto.id});
                             setMessages(prev => [...prev, 
-                              { role: 'agent', type: 'text', content: `Successfully deployed PTO Bundle: ${msg.actionDetails.bundleName} to the catalog.` },
-                              { role: 'agent', type: 'action', actionDetails: { type: 'ASK_PREVIEW' } }
+                              { role: 'agent', type: 'text', content: `Successfully deployed PTO Bundle: ${msg.actionDetails.bundleName} to the catalog in preview mode.` },
+                              { role: 'agent', type: 'action', actionDetails: { type: 'ASK_PUBLISH_LIVE', id: newPto.id, name: msg.actionDetails.bundleName } }
                             ]);
                           } catch (err) {
                             console.error("PTO Creation error:", err);
                           }
-                        }}>Approve & Deploy</button>
+                        }}>Approve & Save Preview</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Publish Live Card */}
+                  {msg.actionDetails.type === 'ASK_PUBLISH_LIVE' && (
+                    <div className="action-card" style={{ background: '#fff9f9', borderLeft: '4px solid var(--lg-red)' }}>
+                      <div className="action-card-title">🚀 Preview looks good?</div>
+                      <div className="action-card-content">
+                        <p>The bundle <strong>{msg.actionDetails.name}</strong> is now visible in the preview storefront. If everything looks correct, you can publish it live.</p>
+                      </div>
+                      <div className="action-row">
+                        <button className="action-btn approve" style={{ background: 'var(--lg-red)' }} onClick={async () => {
+                          try {
+                            const res = await fetch(`/api/promotions/pto/${msg.actionDetails.id}/live`, {
+                              method: 'PUT'
+                            });
+                            if (res.ok) {
+                              setMessages(prev => [...prev, 
+                                { role: 'agent', type: 'text', content: `PTO Bundle: ${msg.actionDetails.name} is now LIVE!` }
+                              ]);
+                            } else {
+                              console.error("Failed to publish live");
+                            }
+                          } catch (err) {
+                            console.error("PTO Publish error:", err);
+                          }
+                        }}>Publish Live</button>
                       </div>
                     </div>
                   )}
@@ -1455,74 +1630,96 @@ function StopPromotionForm({ activePromotions, onSubmit }: { activePromotions: a
 }
 
 // PTO Creation Interactive Form
-function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number, skus: string[], category: string, images: string[]) => void }) {
+function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number, skus: string[], category: string, images: string[], startDate: string, endDate: string) => void }) {
   const [selectedSkus, setSelectedSkus] = useState<string[]>([]);
   const [individualPrices, setIndividualPrices] = useState<Record<string, number>>({});
   const [bundleName, setBundleName] = useState('');
   
+  // Date states
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    return d.toISOString().split('T')[0];
+  });
+  
   const FULL_CATALOG: Record<string, {sku: string, name: string, defaultPrice: number, imageUrl: string}[]> = {
     'TV / Audio': [
-      { sku: 'OLED65G4', name: 'LG OLED evo G4 65" 4K Smart TV', defaultPrice: 2999, imageUrl: '/products/mock_oled.png' },
-      { sku: 'OLED83C4', name: 'LG OLED evo C4 83" 4K Smart TV', defaultPrice: 5499, imageUrl: '/products/mock_oled.png' },
-      { sku: 'S95TR', name: 'LG 9.1.5 ch High Res Audio Soundbar', defaultPrice: 1499, imageUrl: '/products/mock_oled.png' }
+      { sku: 'OLED65G4', name: 'LG OLED evo G4 65" 4K Smart TV', defaultPrice: 2999, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/tvs/oled65c3psa/gallery/DZ-01.jpg' },
+      { sku: 'OLED83C4', name: 'LG OLED evo C4 83" 4K Smart TV', defaultPrice: 5499, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/tvs/oled65c3psa/gallery/DZ-01.jpg' },
+      { sku: 'S95TR', name: 'LG 9.1.5 ch High Res Audio Soundbar', defaultPrice: 1499, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/audio/sp11ra/gallery/DZ_01.jpg' }
     ],
     'Kitchen Appliances': [
-      { sku: 'LRYKC2606S', name: 'LG InstaView Refrigerator', defaultPrice: 3499, imageUrl: '/products/mock_fridge.png' },
-      { sku: 'LSEL6337F', name: 'InstaView Electric Smart Range', defaultPrice: 2099, imageUrl: '/products/mock_fridge.png' }
+      { sku: 'LRYKC2606S', name: 'LG InstaView Refrigerator', defaultPrice: 3499, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/refrigerators/gs-v6010pl/gallery/medium01.jpg' },
+      { sku: 'LSEL6337F', name: 'InstaView Electric Smart Range', defaultPrice: 2099, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/refrigerators/gs-v6010pl/gallery/medium01.jpg' }
     ],
     'Laundry': [
-      { sku: 'WM4000HBA', name: 'LG Front Load Washer', defaultPrice: 1199, imageUrl: '/products/mock_washer.png' },
-      { sku: 'WKE9900', name: 'LG WashTower Center', defaultPrice: 2299, imageUrl: '/products/mock_washer.png' }
+      { sku: 'WM4000HBA', name: 'LG Front Load Washer', defaultPrice: 1199, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/washing-machines/wv9-1412w/gallery/medium01.jpg' },
+      { sku: 'WKE9900', name: 'LG WashTower Center', defaultPrice: 2299, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/washing-machines/wv9-1412w/gallery/medium01.jpg' }
     ],
     'IT / Computing': [
-      { sku: '17Z90S-G.AA75K', name: 'LG gram 17" Laptop', defaultPrice: 1799, imageUrl: '/products/mock_laptop.png' }
+      { sku: '17Z90S-G.AA75K', name: 'LG gram 17" Laptop', defaultPrice: 1799, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/monitors/17z90r-k-aa78a1/gallery/medium01.jpg' }
     ]
   };
 
   const [currentPageProducts, setCurrentPageProducts] = useState<{sku: string, name: string, defaultPrice: number, imageUrl: string}[]>([]);
+  const [retainedProducts, setRetainedProducts] = useState<Record<string, {sku: string, name: string, defaultPrice: number, imageUrl: string}>>({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const scrapeDOM = () => {
-       const cards = document.querySelectorAll('.product-card');
-       const scraped: {sku: string, name: string, defaultPrice: number, imageUrl: string}[] = [];
-       cards.forEach((card) => {
-          const skuNode = card.querySelector('.product-category');
-          const nameNode = card.querySelector('.product-name');
-          const priceNode = card.querySelector('.product-price');
-          const imgNode = card.querySelector('.product-img');
-          
-          if (skuNode && nameNode && priceNode) {
-             const sku = skuNode.textContent?.trim() || '';
-             const name = nameNode.textContent?.trim() || '';
-             const priceStr = priceNode.textContent?.replace(/[^\d.]/g, '') || '0';
-             let price = parseFloat(priceStr);
-             const imageUrl = imgNode?.getAttribute('src') || '/products/mock_laptop.png';
-             if (sku && name) {
-                 scraped.push({ sku, name, defaultPrice: price, imageUrl });
-             }
-          }
-       });
-       
-       // dedupe by sku
-       const unique: {sku: string, name: string, defaultPrice: number, imageUrl: string}[] = [];
-       const seen = new Set();
-       for (const p of scraped) {
-          if (!seen.has(p.sku)) {
-             unique.push(p);
-             seen.add(p.sku);
-          }
-       }
-       setCurrentPageProducts(unique);
+    // Request products from the preview iframe
+    const requestProducts = () => {
+      const iframe = document.getElementById('store-preview-iframe') as HTMLIFrameElement;
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'REQUEST_PRODUCTS' }, '*');
+      }
     };
 
-    scrapeDOM();
-    document.addEventListener('astro:page-load', scrapeDOM);
-    return () => document.removeEventListener('astro:page-load', scrapeDOM);
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'storefront-products-loaded') {
+        if (e.data.products) {
+          const mapped = e.data.products.map((p: any) => ({
+             sku: p.sku,
+             name: p.name,
+             defaultPrice: p.price || p.defaultPrice,
+             imageUrl: p.imageUrl
+          }));
+          // Deduplicate
+          const unique: typeof mapped = [];
+          const seen = new Set();
+          for (const p of mapped) {
+             if (!seen.has(p.sku)) {
+                unique.push(p);
+                seen.add(p.sku);
+             }
+          }
+          setCurrentPageProducts(unique);
+        } else {
+          // Storefront just loaded new products, let's request them
+          requestProducts();
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+
+    // Initial request
+    setTimeout(requestProducts, 500);
+
+    // Whenever iframe loads (or reloads), request again
+    const iframe = document.getElementById('store-preview-iframe');
+    if (iframe) {
+      iframe.addEventListener('load', requestProducts);
+    }
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      if (iframe) iframe.removeEventListener('load', requestProducts);
+    };
   }, []);
 
   const getFlatCatalog = () => {
-     // merge FULL_CATALOG and currentPageProducts for pricing lookup
-     return [...Object.values(FULL_CATALOG).flat(), ...currentPageProducts];
+     // merge FULL_CATALOG, currentPageProducts, and retainedProducts for pricing lookup
+     return [...Object.values(FULL_CATALOG).flat(), ...currentPageProducts, ...Object.values(retainedProducts)];
   };
 
   const [activeTab, setActiveTab] = useState<'current' | 'browse'>('current');
@@ -1539,13 +1736,29 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
            delete copy[sku];
            return copy;
         });
+        setRetainedProducts(prevRetained => {
+           const copy = { ...prevRetained };
+           delete copy[sku];
+           return copy;
+        });
         return next;
       } else {
-        const defaultP = getFlatCatalog().find(c => c.sku === sku)?.defaultPrice || 0;
+        const fullProd = getFlatCatalog().find(c => c.sku === sku);
+        if (fullProd) {
+           setRetainedProducts(prevRetained => ({ ...prevRetained, [sku]: fullProd }));
+        }
+        const defaultP = fullProd?.defaultPrice || 0;
         setIndividualPrices(p => ({ ...p, [sku]: defaultP }));
         return [...prev, sku];
       }
     });
+  };
+
+  const handleClearAll = () => {
+    setSelectedSkus([]);
+    setIndividualPrices({});
+    setRetainedProducts({});
+    setBundleName('');
   };
 
   const handlePriceChange = (sku: string, price: number) => {
@@ -1584,7 +1797,7 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
       <label>1. Select Base Products:</label>
       
       {/* Category Navigation Tabs */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', marginTop: '4px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', marginTop: '4px', alignItems: 'center' }}>
          <button 
            type="button" 
            onClick={() => setActiveTab('current')} 
@@ -1599,29 +1812,51 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
          >
            Browse Full Catalog
          </button>
+         <button 
+           type="button" 
+           onClick={handleClearAll}
+           style={{ fontSize: '0.7rem', padding: '6px', borderRadius: '4px', border: '1px solid #dc3545', background: '#fff', color: '#dc3545', cursor: 'pointer', fontWeight: 'bold' }}
+           title="Clear all selected products"
+         >
+           Clear All
+         </button>
       </div>
 
       {activeTab === 'browse' && (
-         <select 
-            className="chat-input" 
-            style={{ marginBottom: '8px', padding: '4px', fontSize: '0.8rem' }}
-            value={browseCategory} 
-            onChange={(e) => setBrowseCategory(e.target.value)}
-         >
-            {Object.keys(FULL_CATALOG).map(cat => (
-               <option key={cat} value={cat}>{cat}</option>
-            ))}
-         </select>
+         <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+           <select 
+              className="chat-input" 
+              style={{ flex: 1, padding: '4px', fontSize: '0.8rem' }}
+              value={browseCategory} 
+              onChange={(e) => setBrowseCategory(e.target.value)}
+           >
+              {Object.keys(FULL_CATALOG).map(cat => (
+                 <option key={cat} value={cat}>{cat}</option>
+              ))}
+           </select>
+           <input 
+              type="text" 
+              className="chat-input" 
+              style={{ flex: 1, padding: '4px', fontSize: '0.8rem' }}
+              placeholder="Search SKUs..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+           />
+         </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px', background: '#fff', border: '1px solid #ddd', padding: '8px', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto' }}>
         {displayedCatalog.length === 0 ? (
            <p style={{ fontSize: '0.8rem', color: '#888', margin: 0 }}>No products found.</p>
         ) : (
-           displayedCatalog.map(c => (
-             <label key={c.sku} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
-               <input type="checkbox" checked={selectedSkus.includes(c.sku)} onChange={() => handleToggle(c.sku)} />
-               {c.name}
+           displayedCatalog.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.sku.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
+             <label key={c.sku} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem', padding: '6px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', transition: 'background 0.2s', background: selectedSkus.includes(c.sku) ? '#fde8e8' : 'transparent' }}>
+               <input type="checkbox" checked={selectedSkus.includes(c.sku)} onChange={() => handleToggle(c.sku)} style={{ cursor: 'pointer' }} />
+               {c.imageUrl && <img src={c.imageUrl} alt={c.name} style={{ width: '40px', height: '40px', objectFit: 'contain', background: '#f8f9fa', borderRadius: '4px', border: '1px solid #e9ecef' }} />}
+               <div style={{ display: 'flex', flexDirection: 'column' }}>
+                 <span style={{ fontWeight: 700, color: '#333' }}>{c.sku}</span>
+                 <span style={{ color: '#666', fontSize: '0.75rem' }}>{c.name}</span>
+               </div>
              </label>
            ))
         )}
@@ -1673,16 +1908,27 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
                 {Object.keys(FULL_CATALOG).map(cat => <option key={cat} value={cat}>{cat}</option>)}
              </select>
           </div>
+          
+          <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+            <div style={{ flex: 1 }}>
+              <label>Valid From:</label>
+              <input type="date" className="chat-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>Valid To:</label>
+              <input type="date" className="chat-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
+          </div>
 
           <button 
             className="btn btn-primary" 
-            style={{ width: '100%', marginTop: '12px', background: 'var(--lg-red)' }}
+            style={{ width: '100%', marginTop: '16px', background: 'var(--lg-red)' }}
             onClick={(e) => { 
                 e.preventDefault(); 
                 if(bundleName && currentTotal > 0) {
                     const catalog = getFlatCatalog();
                     const imgs = selectedSkus.map(sku => catalog.find(c => c.sku === sku)?.imageUrl).filter((url): url is string => !!url);
-                    onSubmit(bundleName, currentTotal, selectedSkus, bundleCategory, imgs); 
+                    onSubmit(bundleName, currentTotal, selectedSkus, bundleCategory, imgs, startDate, endDate); 
                 }
             }}
             disabled={!bundleName || currentTotal <= 0}
