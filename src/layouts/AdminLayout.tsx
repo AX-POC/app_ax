@@ -71,7 +71,7 @@ export default function AdminLayout() {
             </svg>
             <h1 style={{ margin: 0, paddingBottom: 0, fontSize: 'clamp(1rem, 2.5vw, 1.5rem)', whiteSpace: 'nowrap' }}>Global Admin</h1>
           </Link>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <select
               style={{
                 padding: '0.5rem 1rem',
@@ -95,7 +95,7 @@ export default function AdminLayout() {
                 </option>
               ))}
             </select>
-            <nav style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+            <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
               <Link
                 to="/"
                 style={{
@@ -162,17 +162,7 @@ export default function AdminLayout() {
               >
                 {t('admin.menu.orders', 'Orders')}
               </Link>
-              <Link
-                to="/translations"
-                style={{
-                  color: location.pathname === '/translations' ? 'var(--accent)' : 'var(--text-muted)',
-                  textDecoration: 'none',
-                  fontWeight: location.pathname === '/translations' ? 'bold' : 'normal',
-                  transition: 'color 0.2s'
-                }}
-              >
-                {t('admin.menu.translations', 'Translations')}
-              </Link>
+
               <Link
                 to="/preview"
                 style={{
@@ -201,23 +191,7 @@ export default function AdminLayout() {
               >
                 🛡️ Security
               </Link>
-              <a
-                href="http://localhost:3000/api-docs"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: 'var(--text-muted)',
-                  textDecoration: 'none',
-                  transition: 'color 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.color = 'var(--accent)'}
-                onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-              >
-                {t('admin.menu.apidocs', 'API Docs ↗')}
-              </a>
+
             </nav>
             <select
               value={locale}

@@ -3,7 +3,7 @@
 ------------------------------------- */
 
 :root {
-  --ai-sidebar-width: 480px;
+  --ai-sidebar-width: 420px;
   --ai-shadow: 2px 0 20px rgba(0, 0, 0, 0.05);
   --ai-gradient: linear-gradient(135deg, var(--lg-red, #a50034), #ff4b4b);
   --ai-bg: #ffffff;
