@@ -1386,7 +1386,7 @@ export default function AiAgentSidebar() {
                   )}
 
                   {/* Publish Live Card */}
-                  {msg.actionDetails.type === 'ASK_PUBLISH_LIVE' && (
+                  {msg.type === 'action' && msg.actionDetails?.type === 'ASK_PUBLISH_LIVE' && (
                     <div className="action-card" style={{ background: '#fff9f9', borderLeft: '4px solid var(--lg-red)' }}>
                       <div className="action-card-title">🚀 Preview looks good?</div>
                       <div className="action-card-content">
