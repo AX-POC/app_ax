@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { showSuccessToast, showErrorToast, triggerConfetti } from '../utils/uiHelpers';
 
 export default function StorePreview() {
@@ -7,9 +8,10 @@ export default function StorePreview() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const location = useLocation();
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
+    const searchParams = new URLSearchParams(location.search);
     const queryLocale = searchParams.get('locale');
     const queryCategoryId = searchParams.get('categoryId');
 
@@ -49,6 +51,34 @@ export default function StorePreview() {
       }
       setLocale(newLocale);
     }
+  }, [location.search]);
+
+  // Listen for the iframe telling us it has loaded products
+  useEffect(() => {
+    const handleIframeMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'storefront-products-loaded') {
+        const pending = localStorage.getItem('pending-ai-promo');
+        if (pending) {
+          try {
+            const detail = JSON.parse(pending);
+            localStorage.removeItem('pending-ai-promo');
+            
+            // Wait 1 second for dramatic effect after products finish loading
+            setTimeout(() => {
+              const iframe = document.getElementById('store-preview-iframe') as HTMLIFrameElement;
+              if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({ type: 'ai-action-apply', detail }, '*');
+              }
+            }, 1000);
+          } catch (e) {
+            console.error("Failed to parse pending promo:", e);
+          }
+        }
+      }
+    };
+    
+    window.addEventListener('message', handleIframeMessage);
+    return () => window.removeEventListener('message', handleIframeMessage);
   }, []);
 
   const handleSyncToPreview = async () => {
@@ -85,6 +115,7 @@ export default function StorePreview() {
         body: JSON.stringify({ baseStore: storeId })
       });
       const data = await res.json();
+      localStorage.removeItem('pending-ai-promo');
       triggerConfetti();
       setShowPublishModal(true);
     } catch (err) {
@@ -198,6 +229,20 @@ export default function StorePreview() {
               src={`${(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:4321' : (import.meta.env.VITE_STOREFRONT_URL || 'https://lg-ai-commerce.jeongbo83.workers.dev')}/${locale}/${categoryId ? 'products?categoryId=' + categoryId : ''}`}
               title="Storefront Live Preview"
               style={{ width: '100%', flex: 1, border: 'none', background: '#fff' }}
+              onLoad={(e) => {
+                const iframe = e.target as HTMLIFrameElement;
+                const pendingPromoStr = localStorage.getItem('pending-ai-promo');
+                if (pendingPromoStr && iframe.contentWindow) {
+                  try {
+                    const pendingPromo = JSON.parse(pendingPromoStr);
+                    setTimeout(() => {
+                      iframe.contentWindow?.postMessage({ type: 'ai-action-apply', detail: pendingPromo }, '*');
+                    }, 800);
+                  } catch (err) {
+                    console.error("Failed to parse pending-ai-promo", err);
+                  }
+                }
+              }}
             />
           </div>
         </div>

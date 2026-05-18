@@ -387,6 +387,7 @@ export default function AiAgentSidebar() {
 
     // Instant navigation for PTO flow
     if (activeAgent?.id === 'product' && (text.toLowerCase().includes('pto') || text.toLowerCase().includes('pick to order') || text.toLowerCase().includes('create pto model'))) {
+      localStorage.removeItem('pending-ai-promo');
       if (window.location.pathname !== '/preview') {
          navigate('/preview');
       }
@@ -471,6 +472,35 @@ export default function AiAgentSidebar() {
     if (activeAgent?.id === 'promotion') {
       const lower = text.toLowerCase();
       
+      if (lower.includes('end') || lower.includes('stop')) {
+         if (lower.includes('coupon') || lower.includes('promotion')) {
+           const match = text.match(/(?:stop|end) (?:coupon|promotion) ([\w-]+)/i);
+           if (match && match[1]) {
+             const promoId = match[1];
+             handleStopPromotion(promoId);
+           } else {
+             const lastPromo = activePromotions.length > 0 ? activePromotions[activePromotions.length - 1] : null;
+             setTimeout(() => {
+               setIsTyping(false);
+               if (lastPromo) {
+                 setMessages(prev => [...prev, {
+                   role: 'agent',
+                   type: 'action',
+                   actionDetails: { type: 'ASK_WHICH_COUPON_TO_STOP', lastPromoId: lastPromo.id, lastPromoName: lastPromo.name }
+                 }]);
+               } else {
+                 setMessages(prev => [...prev, {
+                   role: 'agent',
+                   type: 'text',
+                   content: `There are currently no active coupons to stop.`
+                 }]);
+               }
+             }, 800);
+           }
+           return;
+         }
+      }
+
       // Flexible parsing: check if it's asking for a coupon and specifies a percentage
       if (lower.includes('coupon') && /\d+%/.test(lower)) {
         const rateMatch = lower.match(/(\d+)%/);
@@ -591,6 +621,30 @@ export default function AiAgentSidebar() {
         actionDetails: { type: 'PROMOTION', ...promoDetails }
       }]);
     }, 1500);
+  };
+
+  const handleStopPromotion = async (id: string) => {
+    try {
+      const res = await fetch(`/api/promotions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: false })
+      });
+      if (res.ok) {
+        setMessages(prev => [...prev, {
+          role: 'agent',
+          type: 'action',
+          actionDetails: { type: 'STOP_PROMOTION', promotionId: id, schedule: 'Immediate' }
+        }]);
+        setActivePromotions(prev => prev.filter(p => p.id !== id));
+        dispatchAiAction({ type: 'STOP', promotionId: id });
+      } else {
+        setMessages(prev => [...prev, { role: 'agent', type: 'text', content: '⚠️ Failed to stop the promotion. Please try again.' }]);
+      }
+    } catch (err: any) {
+      console.error("Failed to stop promotion:", err);
+      setMessages(prev => [...prev, { role: 'agent', type: 'text', content: `⚠️ Failed to stop promotion: ${err.message}` }]);
+    }
   };
 
   const handleApproveAction = async (details: any) => {
@@ -973,8 +1027,10 @@ export default function AiAgentSidebar() {
                   )}
 
                   {msg.type === 'form' && msg.formType === 'pto_flow' && (
-                    <PtoCreationForm onSubmit={(bundleName, price, skus, category, images, startDate, endDate) => {
-                        setMessages(prev => [...prev, { role: 'user', type: 'text', content: `Create PTO Bundle: [${bundleName}] containing [${skus.join(', ')}] in category [${category}] for $${price}.` }]);
+                    <PtoCreationForm onSubmit={(bundleName, bundleSku, price, skus, categoryId, images, startDate, endDate) => {
+                        const catObj = DESTINATION_CATEGORIES.find(c => c.id === categoryId);
+                        const categoryName = catObj ? catObj.name : 'TV & Soundbars';
+                        setMessages(prev => [...prev, { role: 'user', type: 'text', content: `Create PTO Bundle: [${bundleName}] (SKU: ${bundleSku}) containing [${skus.join(', ')}] in category [${categoryName}] for $${price}.` }]);
                         setIsTyping(true);
                         setTimeout(() => {
                            setIsTyping(false);
@@ -982,7 +1038,7 @@ export default function AiAgentSidebar() {
                              role: 'agent',
                              type: 'action',
                              content: "The dynamic PTO bundle has been configured successfully. Please approve the deployment.",
-                             actionDetails: { type: 'PTO_CREATE', bundleName, price, skus, category, images, startDate, endDate }
+                             actionDetails: { type: 'PTO_CREATE', bundleName, bundleSku, price, skus, category: categoryName, categoryId, images, startDate, endDate }
                            }]);
                         }, 1200);
                     }} />
@@ -1115,6 +1171,7 @@ export default function AiAgentSidebar() {
                       </div>
                       <div className="action-row">
                         <button className="action-btn reject" onClick={() => {
+                          localStorage.removeItem('pending-ai-promo');
                           setMessages(prev => [...prev, { role: 'agent', type: 'text', content: 'Action cancelled. Let me know if you need anything else.'}]);
                         }}>Reject</button>
                         <button className="action-btn secondary" style={{ background: '#475569', color: 'white', border: 'none' }} onClick={async () => {
@@ -1301,6 +1358,22 @@ export default function AiAgentSidebar() {
                     </div>
                   )}
 
+                  {/* Ask Which Coupon to Stop Card */}
+                  {msg.type === 'action' && msg.actionDetails?.type === 'ASK_WHICH_COUPON_TO_STOP' && (
+                    <div className="action-card" style={{ borderLeft: '4px solid var(--lg-red)', background: '#fff4f4' }}>
+                      <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: '#334155' }}><strong>Do you want to stop this coupon?</strong></p>
+                      <p style={{ fontSize: '0.9rem', marginBottom: '10px' }}>Name: <strong>{msg.actionDetails.lastPromoName || msg.actionDetails.lastPromoId}</strong></p>
+                      <div className="action-row">
+                        <button className="action-btn approve" style={{ background: 'var(--lg-red)' }} onClick={() => {
+                           handleStopPromotion(msg.actionDetails.lastPromoId);
+                        }}>Stop This Coupon</button>
+                        <button className="action-btn secondary" style={{ background: '#475569', color: 'white', border: 'none' }} onClick={() => {
+                           setMessages(prev => [...prev, { role: 'agent', type: 'text', content: 'Please provide the exact ID of the coupon you want to stop (e.g. "stop coupon 12345").' }]);
+                        }}>Another coupon</button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Stop Promotion Card */}
                   {msg.type === 'action' && msg.actionDetails?.type === 'STOP_PROMOTION' && (
                     <div className="action-card">
@@ -1348,6 +1421,7 @@ export default function AiAgentSidebar() {
                           </div>
                         )}
                         <p><strong>Name:</strong> {msg.actionDetails.bundleName}</p>
+                        <p><strong>SKU:</strong> {msg.actionDetails.bundleSku}</p>
                         <p><strong>Price:</strong> ${msg.actionDetails.price.toLocaleString()}</p>
                         <p><strong>Category:</strong> {msg.actionDetails.category}</p>
                         <p><strong>Includes:</strong> {msg.actionDetails.skus?.join(' + ')}</p>
@@ -1363,24 +1437,36 @@ export default function AiAgentSidebar() {
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ 
                                 name: msg.actionDetails.bundleName, 
-                                bundlePrice: msg.actionDetails.price, 
+                                price: msg.actionDetails.price, 
                                 bundleCategory: msg.actionDetails.category, 
                                 bundleSkus: msg.actionDetails.skus?.join(','), 
                                 bundleImages: msg.actionDetails.images?.join(','),
-                                startDate: msg.actionDetails.startDate,
-                                endDate: msg.actionDetails.endDate
+                                startDate: msg.actionDetails.startDate ? (msg.actionDetails.startDate.includes('T') ? msg.actionDetails.startDate : `${msg.actionDetails.startDate}T00:00:00`) : null,
+                                endDate: msg.actionDetails.endDate ? (msg.actionDetails.endDate.includes('T') ? msg.actionDetails.endDate : `${msg.actionDetails.endDate}T23:59:59`) : null,
+                                productCode: msg.actionDetails.bundleSku
                               })
                             });
                             const newPto = await res.json();
-                            dispatchAiAction({...msg.actionDetails, id: newPto.id});
+
+                            let categoryId = msg.actionDetails.categoryId || '112';
+                            
+                            const fullDetails = { ...msg.actionDetails, id: newPto.id, categoryId };
+                            localStorage.setItem('pending-ai-promo', JSON.stringify({
+                              type: 'PTO_CREATE',
+                              ...fullDetails
+                            }));
+
+                            navigate(`/preview?categoryId=${categoryId}`);
+                            dispatchAiAction(fullDetails);
+
                             setMessages(prev => [...prev, 
-                              { role: 'agent', type: 'text', content: `Successfully deployed PTO Bundle: ${msg.actionDetails.bundleName} to the catalog in preview mode.` },
-                              { role: 'agent', type: 'action', actionDetails: { type: 'ASK_PUBLISH_LIVE', id: newPto.id, name: msg.actionDetails.bundleName } }
+                              { role: 'agent', type: 'text', content: `Successfully deployed PTO Bundle: ${msg.actionDetails.bundleName} to the catalog in preview mode. Redirecting to Live Preview...` },
+                              { role: 'agent', type: 'action', actionDetails: { type: 'ASK_PUBLISH_LIVE', id: newPto.id, name: msg.actionDetails.bundleName, categoryId } }
                             ]);
                           } catch (err) {
                             console.error("PTO Creation error:", err);
                           }
-                        }}>Approve & Save Preview</button>
+                        }}>Approve & View Preview</button>
                       </div>
                     </div>
                   )}
@@ -1393,6 +1479,13 @@ export default function AiAgentSidebar() {
                         <p>The bundle <strong>{msg.actionDetails.name}</strong> is now visible in the preview storefront. If everything looks correct, you can publish it live.</p>
                       </div>
                       <div className="action-row">
+                        <button className="action-btn secondary" style={{ background: '#475569', color: 'white', border: 'none' }} onClick={() => {
+                          localStorage.setItem('pending-ai-promo', JSON.stringify({
+                            type: 'PTO_CREATE',
+                            ...msg.actionDetails
+                          }));
+                          navigate(`/preview${msg.actionDetails.categoryId ? '?categoryId=' + msg.actionDetails.categoryId : ''}`);
+                        }}>👀 Live Preview</button>
                         <button className="action-btn approve" style={{ background: 'var(--lg-red)' }} onClick={async () => {
                           try {
                             const res = await fetch(`/api/products/pto/${msg.actionDetails.id}/live`, {
@@ -1488,6 +1581,23 @@ export default function AiAgentSidebar() {
     </>
   );
 }
+
+const DESTINATION_CATEGORIES = [
+  { id: '98', name: 'Lifestyle Screens', parent: 'TV-Audio-Video' },
+  { id: '103', name: 'Projectors', parent: 'TV-Audio-Video' },
+  { id: '107', name: 'Speakers', parent: 'TV-Audio-Video' },
+  { id: '112', name: 'TV & Soundbars', parent: 'TV-Audio-Video' },
+  { id: '123', name: 'Video', parent: 'TV-Audio-Video' },
+  { id: '125', name: 'Wireless Earbuds', parent: 'TV-Audio-Video' },
+  { id: '51', name: 'Cooking', parent: 'Appliance' },
+  { id: '55', name: 'Dishwashers', parent: 'Appliance' },
+  { id: '57', name: 'Fridge Freezers', parent: 'Appliance' },
+  { id: '66', name: 'Microwave Ovens', parent: 'Appliance' },
+  { id: '67', name: 'Vacuum Cleaners', parent: 'Appliance' },
+  { id: '72', name: 'Washer & Dryers', parent: 'Appliance' },
+  { id: '85', name: 'Laptops', parent: 'Computing' },
+  { id: '91', name: 'Monitors', parent: 'Computing' }
+];
 
 // Sub-component for the interactive form
 function PromotionForm({ onSubmit }: { onSubmit: (data: any) => void }) {
@@ -1630,10 +1740,26 @@ function StopPromotionForm({ activePromotions, onSubmit }: { activePromotions: a
 }
 
 // PTO Creation Interactive Form
-function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number, skus: string[], category: string, images: string[], startDate: string, endDate: string) => void }) {
+const getFallbackImage = (name: string) => {
+  const initial = (name || 'LG').charAt(0).toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><rect width="40" height="40" fill="#f1f5f9"/><text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-family="sans-serif" font-size="20" font-weight="bold" fill="#a50034">${initial}</text></svg>`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+};
+
+function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, sku: string, price: number, skus: string[], category: string, images: string[], startDate: string, endDate: string) => void }) {
   const [selectedSkus, setSelectedSkus] = useState<string[]>([]);
   const [individualPrices, setIndividualPrices] = useState<Record<string, number>>({});
   const [bundleName, setBundleName] = useState('');
+  const [bundleSku, setBundleSku] = useState('');
+
+  useEffect(() => {
+    if (selectedSkus.length > 0) {
+      const combined = selectedSkus.map(s => s.split('.')[0]).join('.');
+      setBundleSku(combined);
+    } else {
+      setBundleSku('');
+    }
+  }, [selectedSkus]);
   
   // Date states
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -1644,21 +1770,26 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
   });
   
   const FULL_CATALOG: Record<string, {sku: string, name: string, defaultPrice: number, imageUrl: string}[]> = {
-    'TV / Audio': [
-      { sku: 'OLED65G4', name: 'LG OLED evo G4 65" 4K Smart TV', defaultPrice: 2999, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/tvs/oled65c3psa/gallery/DZ-01.jpg' },
-      { sku: 'OLED83C4', name: 'LG OLED evo C4 83" 4K Smart TV', defaultPrice: 5499, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/tvs/oled65c3psa/gallery/DZ-01.jpg' },
-      { sku: 'S95TR', name: 'LG 9.1.5 ch High Res Audio Soundbar', defaultPrice: 1499, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/audio/sp11ra/gallery/DZ_01.jpg' }
+    'Accessories': [
+      { sku: 'MR22GN.AAU', name: 'LG Magic Remote', defaultPrice: 99, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/images/tv-audio-video-accessories/mr22gn_aau_ehap_au_c/350.jpg' },
+      { sku: 'WB21LMB.AAU', name: 'LG Slim Wall Mount', defaultPrice: 149, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/images/tv-audio-video-accessories/wb21lmb_aau_ehap_au_c/350.jpg' }
     ],
-    'Kitchen Appliances': [
-      { sku: 'LRYKC2606S', name: 'LG InstaView Refrigerator', defaultPrice: 3499, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/refrigerators/gs-v6010pl/gallery/medium01.jpg' },
-      { sku: 'LSEL6337F', name: 'InstaView Electric Smart Range', defaultPrice: 2099, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/refrigerators/gs-v6010pl/gallery/medium01.jpg' }
+    'Air Solutions': [
+      { sku: 'AS60GHWG0.AWHQGAP', name: 'LG PuriCare™ 360° Air Purifier', defaultPrice: 1299, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/home-appliances/air-purifiers/as60ghwg0_awhqgap_ehap_au_c/350.jpg' }
     ],
-    'Laundry': [
-      { sku: 'WM4000HBA', name: 'LG Front Load Washer', defaultPrice: 1199, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/washing-machines/wv9-1412w/gallery/medium01.jpg' },
-      { sku: 'WKE9900', name: 'LG WashTower Center', defaultPrice: 2299, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/washing-machines/wv9-1412w/gallery/medium01.jpg' }
+    'Appliance': [
+      { sku: 'GT-515WDC.ASWRGAP', name: '478L Top Mount Fridge - White', defaultPrice: 1099, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/home-appliances/fridge/gt-1si/450x450/VT11CK_Di_GN-B242PFSF_GT-1SI_PY_Front_450X450.jpg/jcr:content/renditions/thum-350x350.jpeg' },
+      { sku: 'MJ3966ABS.BBK7LAP', name: 'NeoChef 39L Smart Inverter Oven', defaultPrice: 649, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/home-appliances/v2-gallery/mwo/450x450/MJ3966ABS-450x450.png/jcr:content/renditions/thum-350x350.jpeg' },
+      { sku: 'DXH9-10W.BGWREAP', name: '10kg Series 9 Heat Pump Dryer', defaultPrice: 1899, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/home-appliances/dryers/choice-gallery-images/dxh9-10w/450x450_DXH910W.jpg/jcr:content/renditions/thum-350x350.jpeg' }
     ],
-    'IT / Computing': [
-      { sku: '17Z90S-G.AA75K', name: 'LG gram 17" Laptop', defaultPrice: 1799, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/monitors/17z90r-k-aa78a1/gallery/medium01.jpg' }
+    'Computing': [
+      { sku: '27HJ712C-W.AAU', name: '27" Ultra HD Monitor', defaultPrice: 1099, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/images/medical-monitors/27hj712c-w_aau_ehap_au_c/27HJ712S-W_350.jpg' },
+      { sku: '17Z90P-G.AA75A', name: 'LG gram 17" Ultra-Lightweight Laptop', defaultPrice: 2499, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/images/laptops/17z90p-g_aa75a_ehap_au_c/17Z90P_Front-350.jpg' }
+    ],
+    'TV-Audio-Video': [
+      { sku: '86QNED86TSA.AAU', name: '86 inch LG QNED86 4K Smart TV', defaultPrice: 4299, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/images/tvs/86qned86tsa_aau_ehap_au_c/QNED86_86__FRONT-450.jpg/jcr:content/renditions/thum-350x350.jpeg' },
+      { sku: '65ART90ESQA.AAU', name: 'LG OLED evo ART90', defaultPrice: 12999, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/images/tvs/65art90esqa_aau_ehap_au_c/350.jpg' },
+      { sku: 'S60T.AAUSLLK', name: 'LG Sound Bar S60T', defaultPrice: 499, imageUrl: 'https://www.lg.com/content/dam/channel/wcms/au/images/sound-bars/s60t_aausllk_ehap_au_c/350.jpg' }
     ]
   };
 
@@ -1723,8 +1854,8 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
   };
 
   const [activeTab, setActiveTab] = useState<'current' | 'browse'>('current');
-  const [browseCategory, setBrowseCategory] = useState<string>('TV / Audio');
-  const [bundleCategory, setBundleCategory] = useState('TV / Audio');
+  const [browseCategory, setBrowseCategory] = useState<string>('TV-Audio-Video');
+  const [bundleCategoryId, setBundleCategoryId] = useState('112');
 
   const handleToggle = (sku: string) => {
     setSelectedSkus(prev => {
@@ -1801,14 +1932,14 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
          <button 
            type="button" 
            onClick={() => setActiveTab('current')} 
-           style={{ flex: 1, fontSize: '0.7rem', padding: '6px', borderRadius: '4px', border: '1px solid #ccc', background: activeTab === 'current' ? 'var(--lg-red)' : '#fff', color: activeTab === 'current' ? '#fff' : '#333' }}
+           style={{ flex: 1, fontSize: '0.7rem', padding: '6px', borderRadius: '4px', border: '1px solid #ccc', background: activeTab === 'current' ? 'var(--lg-red)' : '#fff', color: activeTab === 'current' ? '#fff' : '#333', cursor: 'pointer' }}
          >
            Current Page ({currentPageProducts.length})
          </button>
          <button 
            type="button" 
            onClick={() => setActiveTab('browse')} 
-           style={{ flex: 1, fontSize: '0.7rem', padding: '6px', borderRadius: '4px', border: '1px solid #ccc', background: activeTab === 'browse' ? 'var(--lg-red)' : '#fff', color: activeTab === 'browse' ? '#fff' : '#333' }}
+           style={{ flex: 1, fontSize: '0.7rem', padding: '6px', borderRadius: '4px', border: '1px solid #ccc', background: activeTab === 'browse' ? 'var(--lg-red)' : '#fff', color: activeTab === 'browse' ? '#fff' : '#333', cursor: 'pointer' }}
          >
            Browse Full Catalog
          </button>
@@ -1852,7 +1983,7 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
            displayedCatalog.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.sku.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
              <label key={c.sku} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem', padding: '6px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', transition: 'background 0.2s', background: selectedSkus.includes(c.sku) ? '#fde8e8' : 'transparent' }}>
                <input type="checkbox" checked={selectedSkus.includes(c.sku)} onChange={() => handleToggle(c.sku)} style={{ cursor: 'pointer' }} />
-               {c.imageUrl && <img src={c.imageUrl} alt={c.name} style={{ width: '40px', height: '40px', objectFit: 'contain', background: '#f8f9fa', borderRadius: '4px', border: '1px solid #e9ecef' }} />}
+               {c.imageUrl && <img src={c.imageUrl} alt={c.name} style={{ width: '40px', height: '40px', objectFit: 'contain', background: '#f8f9fa', borderRadius: '4px', border: '1px solid #e9ecef' }} onError={(e) => { (e.target as HTMLImageElement).src = getFallbackImage(c.name); }} />}
                <div style={{ display: 'flex', flexDirection: 'column' }}>
                  <span style={{ fontWeight: 700, color: '#333' }}>{c.sku}</span>
                  <span style={{ color: '#666', fontSize: '0.75rem' }}>{c.name}</span>
@@ -1883,11 +2014,11 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
           </div>
 
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '12px', background: '#f5f5f5', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}>
-             <select className="chat-input" style={{ minWidth: '75px', padding: '6px', fontSize: '0.8rem' }} value={discountType} onChange={e => setDiscountType(e.target.value)}>
+             <select className="chat-input" style={{ width: '65px', padding: '6px 2px', fontSize: '0.8rem' }} value={discountType} onChange={e => setDiscountType(e.target.value)}>
                <option value="PERCENT">% Off</option>
                <option value="FIXED">$ Off</option>
              </select>
-             <input type="number" className="chat-input" style={{ flex: 1, minWidth: '60px', padding: '6px' }} placeholder="Amount" value={discountValue} onChange={e => setDiscountValue(Number(e.target.value))} />
+             <input type="number" className="chat-input" style={{ flex: 1, minWidth: '80px', padding: '6px' }} placeholder="Amount" value={discountValue} onChange={e => setDiscountValue(Number(e.target.value))} />
              <button 
                 type="button" 
                 style={{ fontSize: '0.75rem', padding: '6px 14px', whiteSpace: 'nowrap', background: 'var(--lg-black)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} 
@@ -1902,10 +2033,15 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
              <input type="text" className="chat-input" value={bundleName} onChange={e => setBundleName(e.target.value)} placeholder="e.g. Dream Kitchen Combo" />
           </div>
 
+          <div style={{ marginBottom: '12px' }}>
+             <label>4. SKU</label>
+             <input type="text" className="chat-input" value={bundleSku} onChange={e => setBundleSku(e.target.value)} placeholder="e.g. 86NANO81TSA.S60T" />
+          </div>
+
           <div>
-             <label>4. Destination Category</label>
-             <select className="chat-input" style={{ width: '100%', padding: '6px', fontSize: '0.8rem' }} value={bundleCategory} onChange={e => setBundleCategory(e.target.value)}>
-                {Object.keys(FULL_CATALOG).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+             <label>5. Destination Category</label>
+             <select className="chat-input" style={{ width: '100%', padding: '6px', fontSize: '0.8rem' }} value={bundleCategoryId} onChange={e => setBundleCategoryId(e.target.value)}>
+                {DESTINATION_CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.parent} &gt; {cat.name}</option>)}
              </select>
           </div>
           
@@ -1928,7 +2064,7 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, price: number,
                 if(bundleName && currentTotal > 0) {
                     const catalog = getFlatCatalog();
                     const imgs = selectedSkus.map(sku => catalog.find(c => c.sku === sku)?.imageUrl).filter((url): url is string => !!url);
-                    onSubmit(bundleName, currentTotal, selectedSkus, bundleCategory, imgs, startDate, endDate); 
+                    onSubmit(bundleName, bundleSku, currentTotal, selectedSkus, bundleCategoryId, imgs, startDate, endDate); 
                 }
             }}
             disabled={!bundleName || currentTotal <= 0}
