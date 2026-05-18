@@ -599,7 +599,7 @@ export default function AiAgentSidebar() {
     submitMessage(inputText);
   };
 
-  const handleFormSubmit = (promoDetails: any) => {
+  const handleFormSubmit = async (promoDetails: any) => {
     const isPct = promoDetails.discountType === 'PERCENT';
     const valObj = isPct ? `${promoDetails.rate}%` : `$${promoDetails.rate}`;
     const targetObj = promoDetails.target === 'Specific SKU' ? `SKU ${promoDetails.sku}` : promoDetails.target;
@@ -612,15 +612,35 @@ export default function AiAgentSidebar() {
     }]);
 
     setIsTyping(true);
-    setTimeout(() => {
+    try {
+      const payload = {
+        ...promoDetails,
+        name: promoDetails.name || "AI Generated Coupon",
+        targetScope: promoDetails.target,
+        discountValue: promoDetails.rate,
+        targetSku: promoDetails.sku,
+        isActive: false,
+        startDate: promoDetails.startDate ? (promoDetails.startDate.includes('T') ? promoDetails.startDate : `${promoDetails.startDate}T00:00:00`) : null,
+        endDate: promoDetails.endDate ? (promoDetails.endDate.includes('T') ? promoDetails.endDate : `${promoDetails.endDate}T23:59:59`) : null
+      };
+      const res = await fetch('/api/promotions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const newPromo = await res.json();
+      
       setIsTyping(false);
       setMessages(prev => [...prev, {
         role: 'agent',
         type: 'action',
         content: "I've drafted the promotion settings based on the form. Would you like to preview this live before deploying?",
-        actionDetails: { type: 'PROMOTION', ...promoDetails }
+        actionDetails: { type: 'PROMOTION', ...promoDetails, id: newPromo.id }
       }]);
-    }, 1500);
+    } catch (err) {
+      console.error(err);
+      setIsTyping(false);
+    }
   };
 
   const handleStopPromotion = async (id: string) => {
@@ -650,16 +670,10 @@ export default function AiAgentSidebar() {
   const handleApproveAction = async (details: any) => {
     try {
       const payload = {
-        ...details,
-        name: details.name || "AI Generated Coupon",
-        targetScope: details.target,
-        discountValue: details.rate,
-        targetSku: details.sku,
-        startDate: details.startDate ? (details.startDate.includes('T') ? details.startDate : `${details.startDate}T00:00:00`) : null,
-        endDate: details.endDate ? (details.endDate.includes('T') ? details.endDate : `${details.endDate}T23:59:59`) : null
+        isActive: true
       };
-      const res = await fetch('/api/promotions', {
-        method: 'POST',
+      const res = await fetch(`/api/promotions/${details.id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
