@@ -685,6 +685,10 @@ export default function AiAgentSidebar() {
         actionDetails: { type: 'PROMOTION_SUCCESS', promotionId: newPromo.id, affectedCount, target: details.target, sku: details.sku }
       }]);
 
+      window.dispatchEvent(new CustomEvent('show-promo-success-modal', { 
+        detail: { promotionId: newPromo.id, affectedCount, target: details.target, sku: details.sku } 
+      }));
+
       dispatchAiAction({ type: 'PROMOTION', promotion: newPromo });
     } catch (err: any) {
       console.error("Failed to save promotion:", err);

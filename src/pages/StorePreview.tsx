@@ -8,7 +8,17 @@ export default function StorePreview() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [promoSuccessDetails, setPromoSuccessDetails] = useState<any>(null);
   const location = useLocation();
+
+  useEffect(() => {
+    const handleShowModal = (e: any) => {
+      setPromoSuccessDetails(e.detail);
+      triggerConfetti();
+    };
+    window.addEventListener('show-promo-success-modal', handleShowModal as any);
+    return () => window.removeEventListener('show-promo-success-modal', handleShowModal as any);
+  }, []);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -186,6 +196,56 @@ export default function StorePreview() {
 
       {/* Astro Storefront Iframe */}
       <div style={{ flex: 1, position: 'relative' }}>
+        {promoSuccessDetails && (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0, 0, 0, 0.4)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 9999,
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            <div style={{
+              background: '#f0fdf4', border: '1px solid #bbf7d0',
+              borderRadius: '12px', padding: '24px', width: '400px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              animation: 'slideUp 0.3s ease-out',
+              position: 'relative'
+            }}>
+              {/* Close Button */}
+              <button 
+                onClick={() => setPromoSuccessDetails(null)}
+                style={{
+                  position: 'absolute', top: '16px', right: '16px',
+                  background: 'transparent', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#64748b'
+                }}
+              >✕</button>
+
+              <div style={{ color: '#166534', fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                Deployment Successful
+              </div>
+              
+              <p style={{ fontSize: '0.95rem', marginBottom: '24px', color: '#14532d', lineHeight: '1.5' }}>
+                Promotion <strong style={{ color: '#065f46' }}>[{promoSuccessDetails.promotionId}]</strong> applied to {promoSuccessDetails.affectedCount?.toLocaleString() || 1} item(s) in {promoSuccessDetails.target}.
+              </p>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <button style={{ width: '100%', padding: '10px', background: 'white', border: '1px solid #94a3b8', borderRadius: '6px', fontSize: '0.9rem', color: '#334155', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '500', transition: 'all 0.2s' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                  Download Excel List ({promoSuccessDetails.affectedCount || 1})
+                </button>
+                <button style={{ width: '100%', padding: '10px', background: '#b90e1c', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 'bold', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(185, 14, 28, 0.2)' }} onClick={() => {
+                  setPromoSuccessDetails(null);
+                  window.location.href = '/admin/promotions';
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                  View list in Promotion Admin
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {isLoading && (
           <div style={{ 
             position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
