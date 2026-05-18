@@ -1497,8 +1497,24 @@ export default function AiAgentSidebar() {
                             });
                             if (res.ok) {
                               setMessages(prev => [...prev, 
-                                { role: 'agent', type: 'text', content: `PTO Bundle: ${msg.actionDetails.name} is now LIVE!` }
+                                { role: 'agent', type: 'action', actionDetails: { 
+                                    type: 'PROMOTION_SUCCESS', 
+                                    promotionId: `PTO-${msg.actionDetails.id}`, 
+                                    affectedCount: 1, 
+                                    target: 'PTO Catalog', 
+                                    sku: msg.actionDetails.productCode 
+                                  } 
+                                }
                               ]);
+                              
+                              window.dispatchEvent(new CustomEvent('show-promo-success-modal', { 
+                                detail: { 
+                                  promotionId: `PTO-${msg.actionDetails.id}`, 
+                                  affectedCount: 1, 
+                                  target: 'PTO Catalog', 
+                                  sku: msg.actionDetails.productCode 
+                                } 
+                              }));
                             } else {
                               console.error("Failed to publish live");
                             }
