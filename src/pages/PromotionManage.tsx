@@ -36,10 +36,11 @@ export default function PromotionManage() {
   const [couponForm, setCouponForm] = useState({ id: '', name: '', code: '', type: 'percentage', value: '', expiry: '' });
   const [selectedCoupons, setSelectedCoupons] = useState<string[]>([]);
   const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
   const fetchCoupons = async () => {
     try {
-      const res = await fetch('/api/promotions');
+      const res = await fetch('/api/promotions?all=true');
       if (res.ok) {
         const data = await res.json();
         const dbCoupons = data.filter((p: any) => p.type !== 'PTO_BUNDLE').map((p: any) => ({
@@ -302,9 +303,23 @@ export default function PromotionManage() {
               </div>
             </form>
 
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-               <button className="btn" style={{ fontSize: '0.8rem', padding: '6px 12px', background: '#e2e8f0', color: '#1e293b', border: 'none', borderRadius: '4px', cursor: selectedCoupons.length === 0 ? 'not-allowed' : 'pointer', opacity: selectedCoupons.length === 0 ? 0.5 : 1 }} onClick={() => handleBulkStatusChange(true)} disabled={selectedCoupons.length === 0}>Activate Selected</button>
-               <button className="btn" style={{ fontSize: '0.8rem', padding: '6px 12px', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '4px', cursor: selectedCoupons.length === 0 ? 'not-allowed' : 'pointer', opacity: selectedCoupons.length === 0 ? 0.5 : 1 }} onClick={() => handleBulkStatusChange(false)} disabled={selectedCoupons.length === 0}>Deactivate Selected</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                 <button className="btn" style={{ fontSize: '0.8rem', padding: '6px 12px', background: '#e2e8f0', color: '#1e293b', border: 'none', borderRadius: '4px', cursor: selectedCoupons.length === 0 ? 'not-allowed' : 'pointer', opacity: selectedCoupons.length === 0 ? 0.5 : 1 }} onClick={() => handleBulkStatusChange(true)} disabled={selectedCoupons.length === 0}>Activate Selected</button>
+                 <button className="btn" style={{ fontSize: '0.8rem', padding: '6px 12px', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '4px', cursor: selectedCoupons.length === 0 ? 'not-allowed' : 'pointer', opacity: selectedCoupons.length === 0 ? 0.5 : 1 }} onClick={() => handleBulkStatusChange(false)} disabled={selectedCoupons.length === 0}>Deactivate Selected</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                 <label style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>Status Filter:</label>
+                 <select 
+                   value={statusFilter} 
+                   onChange={(e) => setStatusFilter(e.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE')}
+                   style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.85rem' }}
+                 >
+                   <option value="ALL">All Coupons</option>
+                   <option value="ACTIVE">Active Only</option>
+                   <option value="INACTIVE">Inactive Only</option>
+                 </select>
+              </div>
             </div>
             <div className="table-wrapper">
               <table className="product-table">
@@ -326,7 +341,7 @@ export default function PromotionManage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {coupons.map(c => (
+                  {coupons.filter(c => statusFilter === 'ALL' ? true : (statusFilter === 'ACTIVE' ? c.isActive : !c.isActive)).map(c => (
                     <tr key={c.id}>
                       <td style={{ textAlign: 'center' }}>
                         <input type="checkbox" checked={selectedCoupons.includes(c.id)} onChange={(e) => {
@@ -376,7 +391,7 @@ export default function PromotionManage() {
                       </td>
                     </tr>
                   ))}
-                  {coupons.length === 0 && <tr><td colSpan={8} className="text-center">No coupons found.</td></tr>}
+                  {coupons.filter(c => statusFilter === 'ALL' ? true : (statusFilter === 'ACTIVE' ? c.isActive : !c.isActive)).length === 0 && <tr><td colSpan={8} className="text-center">No coupons found.</td></tr>}
                 </tbody>
               </table>
             </div>
