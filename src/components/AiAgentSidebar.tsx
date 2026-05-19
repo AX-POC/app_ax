@@ -9,7 +9,7 @@ const agents = [
     name: 'Promotion Agent',
     desc: 'Handles campaigns, coupons, and discounts.',
     avatar: '/agents/promo_animal.png',
-    suggestions: ['Create coupon', 'Start pre-order']
+    suggestions: ['Create coupon']
   },
   {
     id: 'product',
