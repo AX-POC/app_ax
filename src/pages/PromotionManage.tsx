@@ -32,17 +32,111 @@ export default function PromotionManage() {
   }, []);
 
   // --- 1. Coupon Management ---
-  const [coupons, setCoupons] = useState([
-    { id: 1, code: 'WELCOME10', type: 'percentage', value: 10, expiry: '2026-12-31' },
-    { id: 2, code: 'MINUS50', type: 'fixed', value: 50, expiry: '2026-06-30' }
-  ]);
-  const [couponForm, setCouponForm] = useState({ code: '', type: 'percentage', value: '', expiry: '' });
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponForm, setCouponForm] = useState({ id: '', name: '', code: '', type: 'percentage', value: '', expiry: '' });
+  const [selectedCoupons, setSelectedCoupons] = useState<string[]>([]);
+  const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
 
-  const handleCreateCoupon = (e: React.FormEvent) => {
+  const fetchCoupons = async () => {
+    try {
+      const res = await fetch('/api/promotions');
+      if (res.ok) {
+        const data = await res.json();
+        const dbCoupons = data.filter((p: any) => p.type !== 'PTO_BUNDLE').map((p: any) => ({
+          id: p.id,
+          name: p.name || 'AI_COUPON',
+          code: p.description || p.name || '-',
+          type: p.discountType === 'PERCENT' ? 'percentage' : 'fixed',
+          value: p.discountValue,
+          expiry: p.endDate ? p.endDate.split('T')[0] : 'No Expiry',
+          isActive: p.isActive
+        }));
+        setCoupons(dbCoupons);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCoupons();
+    
+    // Listen for AI Agent coupon creation
+    const handleAiUpdate = () => fetchCoupons();
+    window.addEventListener('show-promo-success-modal', handleAiUpdate);
+    window.addEventListener('ai-action-apply', handleAiUpdate);
+    
+    return () => {
+      window.removeEventListener('show-promo-success-modal', handleAiUpdate);
+      window.removeEventListener('ai-action-apply', handleAiUpdate);
+    };
+  }, []);
+
+  const handleCreateCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!couponForm.code || !couponForm.value) return;
-    setCoupons([...coupons, { id: Date.now(), code: couponForm.code, type: couponForm.type, value: Number(couponForm.value), expiry: couponForm.expiry }]);
-    setCouponForm({ code: '', type: 'percentage', value: '', expiry: '' });
+    if (!couponForm.name || !couponForm.code || !couponForm.value) return;
+    
+    try {
+      const payload = {
+        type: 'COUPON',
+        name: couponForm.name,
+        description: couponForm.code,
+        discountType: couponForm.type === 'percentage' ? 'PERCENT' : 'FIXED',
+        discountValue: Number(couponForm.value),
+        endDate: couponForm.expiry ? (couponForm.expiry.includes('T') ? couponForm.expiry : `${couponForm.expiry}T23:59:59`) : null,
+        isActive: true,
+        targetScope: 'All Products'
+      };
+
+      if (editingCouponId) {
+        await fetch(`/api/promotions/${editingCouponId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        setEditingCouponId(null);
+      } else {
+        await fetch('/api/promotions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+      
+      fetchCoupons();
+      setCouponForm({ id: '', name: '', code: '', type: 'percentage', value: '', expiry: '' });
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+  const handleEditClick = (coupon: any) => {
+    setEditingCouponId(coupon.id);
+    setCouponForm({
+      id: coupon.id,
+      name: coupon.name,
+      code: coupon.code,
+      type: coupon.type,
+      value: coupon.value,
+      expiry: coupon.expiry !== 'No Expiry' ? coupon.expiry : ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleBulkStatusChange = async (isActive: boolean) => {
+    try {
+      await Promise.all(selectedCoupons.map(id => 
+        fetch(`/api/promotions/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isActive })
+        })
+      ));
+      setSelectedCoupons([]);
+      fetchCoupons();
+    } catch(err) {
+      console.error(err);
+    }
   };
 
   const handleDownloadCouponProducts = (code: string) => {
@@ -173,9 +267,15 @@ export default function PromotionManage() {
             <form onSubmit={handleCreateCoupon} className="product-form" style={{ marginBottom: '2rem' }}>
               <div className="form-row">
                 <div className="form-group">
+                  <label>Coupon Name</label>
+                  <input type="text" value={couponForm.name} onChange={e => setCouponForm({...couponForm, name: e.target.value})} placeholder="e.g. Summer Sale" required />
+                </div>
+                <div className="form-group">
                   <label>Coupon Code</label>
                   <input type="text" value={couponForm.code} onChange={e => setCouponForm({...couponForm, code: e.target.value})} placeholder="e.g. SUMMER24" required />
                 </div>
+              </div>
+              <div className="form-row">
                 <div className="form-group">
                   <label>Discount Type</label>
                   <select value={couponForm.type} onChange={e => setCouponForm({...couponForm, type: e.target.value})}>
@@ -183,8 +283,6 @@ export default function PromotionManage() {
                     <option value="fixed">Fixed Amount ($)</option>
                   </select>
                 </div>
-              </div>
-              <div className="form-row">
                 <div className="form-group">
                   <label>Discount Value</label>
                   <input type="number" value={couponForm.value} onChange={e => setCouponForm({...couponForm, value: e.target.value})} placeholder="10" required />
@@ -194,43 +292,91 @@ export default function PromotionManage() {
                   <input type="date" value={couponForm.expiry} onChange={e => setCouponForm({...couponForm, expiry: e.target.value})} required />
                 </div>
               </div>
-              <button type="submit" className="btn-primary">Create Coupon</button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="submit" className="btn-primary">
+                  {editingCouponId ? 'Update Coupon' : 'Create Coupon'}
+                </button>
+                {editingCouponId && (
+                  <button type="button" className="btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ccc', padding: '0.75rem 1.5rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => { setEditingCouponId(null); setCouponForm({ id: '', name: '', code: '', type: 'percentage', value: '', expiry: '' }); }}>Cancel</button>
+                )}
+              </div>
             </form>
 
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+               <button className="btn" style={{ fontSize: '0.8rem', padding: '6px 12px', background: '#e2e8f0', color: '#1e293b', border: 'none', borderRadius: '4px', cursor: selectedCoupons.length === 0 ? 'not-allowed' : 'pointer', opacity: selectedCoupons.length === 0 ? 0.5 : 1 }} onClick={() => handleBulkStatusChange(true)} disabled={selectedCoupons.length === 0}>Activate Selected</button>
+               <button className="btn" style={{ fontSize: '0.8rem', padding: '6px 12px', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '4px', cursor: selectedCoupons.length === 0 ? 'not-allowed' : 'pointer', opacity: selectedCoupons.length === 0 ? 0.5 : 1 }} onClick={() => handleBulkStatusChange(false)} disabled={selectedCoupons.length === 0}>Deactivate Selected</button>
+            </div>
             <div className="table-wrapper">
               <table className="product-table">
-                <thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Expiry</th><th>Action</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px', textAlign: 'center' }}>
+                      <input type="checkbox" onChange={(e) => {
+                        if (e.target.checked) setSelectedCoupons(coupons.map(c => c.id));
+                        else setSelectedCoupons([]);
+                      }} checked={selectedCoupons.length > 0 && selectedCoupons.length === coupons.length} />
+                    </th>
+                    <th>Status</th>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Value</th>
+                    <th>Expiry</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {coupons.map(c => (
                     <tr key={c.id}>
+                      <td style={{ textAlign: 'center' }}>
+                        <input type="checkbox" checked={selectedCoupons.includes(c.id)} onChange={(e) => {
+                           if (e.target.checked) setSelectedCoupons(prev => [...prev, c.id]);
+                           else setSelectedCoupons(prev => prev.filter(id => id !== c.id));
+                        }} />
+                      </td>
+                      <td>
+                        <span className={c.isActive ? 'badge-success' : 'badge-warning'} style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                          {c.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
                       <td className="fw-bold">{c.code}</td>
+                      <td>{c.name}</td>
                       <td style={{ textTransform: 'capitalize' }}>{c.type}</td>
                       <td>{c.type === 'percentage' ? `${c.value}%` : `$${c.value}`}</td>
                       <td>{c.expiry}</td>
                       <td>
-                        <button 
-                          onClick={() => handleDownloadCouponProducts(c.code)}
-                          style={{
-                            background: '#f1f5f9',
-                            border: '1px solid #cbd5e1',
-                            color: '#334155',
-                            padding: '4px 10px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '0.8rem',
-                            fontWeight: 'bold',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                          Download Applied Products
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button 
+                            className="btn"
+                            style={{ background: '#e0f2fe', border: '1px solid #bae6fd', color: '#0369a1', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
+                            onClick={() => handleEditClick(c)}
+                          >
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDownloadCouponProducts(c.code)}
+                            style={{
+                              background: '#f1f5f9',
+                              border: '1px solid #cbd5e1',
+                              color: '#334155',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.8rem',
+                              fontWeight: 'bold',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Download
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
-                  {coupons.length === 0 && <tr><td colSpan={5} className="text-center">No coupons found.</td></tr>}
+                  {coupons.length === 0 && <tr><td colSpan={8} className="text-center">No coupons found.</td></tr>}
                 </tbody>
               </table>
             </div>

@@ -82,6 +82,11 @@
   border-color: var(--lg-red);
 }
 
+@keyframes agentPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
 .ai-agent-avatar {
   width: 70px;
   height: 70px;
@@ -89,6 +94,13 @@
   background: #EEE;
   object-fit: cover;
   flex-shrink: 0;
+  animation: agentPulse 2s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+.ai-chat-header img {
+  animation: agentPulse 2s ease-in-out infinite;
+  transform-origin: center center;
 }
 
 .ai-agent-info h3 {

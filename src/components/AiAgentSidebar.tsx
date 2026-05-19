@@ -616,6 +616,7 @@ export default function AiAgentSidebar() {
       const payload = {
         ...promoDetails,
         name: promoDetails.name || "AI Generated Coupon",
+        description: promoDetails.couponCode,
         targetScope: promoDetails.target,
         discountValue: promoDetails.rate,
         targetSku: promoDetails.sku,
@@ -1635,6 +1636,8 @@ const DESTINATION_CATEGORIES = [
 
 // Sub-component for the interactive form
 function PromotionForm({ onSubmit }: { onSubmit: (data: any) => void }) {
+  const [name, setName] = useState('Special Discount Coupon');
+  const [couponCode, setCouponCode] = useState(() => 'SAVE-' + Math.floor(1000 + Math.random() * 9000));
   const [discountType, setDiscountType] = useState('PERCENT');
   const [rate, setRate] = useState(15);
   const [target, setTarget] = useState('All Products');
@@ -1661,6 +1664,16 @@ function PromotionForm({ onSubmit }: { onSubmit: (data: any) => void }) {
 
   return (
     <div className="chat-form">
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+        <div style={{ flex: 1 }}>
+          <label>Coupon Name</label>
+          <input type="text" className="chat-input" value={name} onChange={e => setName(e.target.value)} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label>Coupon Code</label>
+          <input type="text" className="chat-input" value={couponCode} onChange={e => setCouponCode(e.target.value)} />
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: '8px' }}>
         <div style={{ flex: 1 }}>
           <label>Type</label>
@@ -1711,7 +1724,7 @@ function PromotionForm({ onSubmit }: { onSubmit: (data: any) => void }) {
       <button 
         className="btn btn-primary" 
         style={{ padding: '8px', fontSize: '0.85rem', width: '100%', marginTop: '12px' }}
-        onClick={(e) => { e.preventDefault(); onSubmit({ discountType, rate, target, sku, audience: audiences.join(', '), startDate, endDate }); }}
+        onClick={(e) => { e.preventDefault(); onSubmit({ name, couponCode, discountType, rate, target, sku, audience: audiences.join(', '), startDate, endDate }); }}
       >
         Set Parameters
       </button>
