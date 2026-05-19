@@ -509,7 +509,7 @@ export default function AiAgentSidebar() {
         let target = 'All Products';
         if (lower.includes('tv')) target = 'All TV';
         else if (lower.includes('soundbar')) target = 'All Soundbar';
-        else if (lower.includes('ref')) target = 'All Refrigerator';
+        else if (lower.includes('wash') || lower.includes('dry')) target = 'All Washing Machine';
         else if (lower.includes('sku')) target = 'Specific SKU';
         
         let audience = 'ALL';
@@ -691,7 +691,7 @@ export default function AiAgentSidebar() {
       if (details.target === 'All Products') affectedCount = 1450;
       else if (details.target === 'All TV') affectedCount = 38;
       else if (details.target === 'All Soundbar') affectedCount = 12;
-      else if (details.target === 'All Refrigerator') affectedCount = 45;
+      else if (details.target === 'All Washing Machine') affectedCount = 45;
       else if (details.target === 'Specific SKU') affectedCount = 1;
 
       setMessages(prev => [...prev, {
@@ -1222,7 +1222,7 @@ export default function AiAgentSidebar() {
                           if (!categoryId && msg.actionDetails.target !== 'All Products') {
                             if (msg.actionDetails.target === 'All TV') categoryId = '112';
                             else if (msg.actionDetails.target === 'All Soundbar') categoryId = '110';
-                            else if (msg.actionDetails.target === 'All Refrigerator') categoryId = '76';
+                            else if (msg.actionDetails.target === 'All Washing Machine') categoryId = '76';
                           }
 
                           localStorage.setItem('pending-ai-promo', JSON.stringify({
@@ -1259,7 +1259,7 @@ export default function AiAgentSidebar() {
                               if (msg.actionDetails.target === 'All Products') affectedCount = 1450;
                               else if (msg.actionDetails.target === 'All TV') affectedCount = 38;
                               else if (msg.actionDetails.target === 'All Soundbar') affectedCount = 12;
-                              else if (msg.actionDetails.target === 'All Refrigerator') affectedCount = 45;
+                              else if (msg.actionDetails.target === 'All Washing Machine') affectedCount = 45;
                             }
                           }
 
@@ -1693,7 +1693,7 @@ function PromotionForm({ onSubmit }: { onSubmit: (data: any) => void }) {
           <option value="All Products">All Products</option>
           <option value="All TV">All TV</option>
           <option value="All Soundbar">All Soundbar</option>
-          <option value="All Refrigerator">All Refrigerator</option>
+          <option value="All Washing Machine">All Washing Machine</option>
           <option value="Specific SKU">Specific SKU</option>
         </select>
       </div>
