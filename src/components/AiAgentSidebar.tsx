@@ -2014,7 +2014,7 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, sku: string, p
       <label>1. Select Base Products:</label>
       
       {/* Category Navigation Tabs */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', marginTop: '4px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', marginTop: '4px', alignItems: 'stretch' }}>
          <button 
            type="button" 
            onClick={() => setActiveTab('current')} 
