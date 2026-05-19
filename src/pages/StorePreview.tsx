@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { showSuccessToast, showErrorToast, triggerConfetti } from '../utils/uiHelpers';
 
 export default function StorePreview() {
@@ -10,6 +10,7 @@ export default function StorePreview() {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [promoSuccessDetails, setPromoSuccessDetails] = useState<any>(null);
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleShowModal = (e: any) => {
@@ -231,13 +232,30 @@ export default function StorePreview() {
               </p>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <button style={{ width: '100%', padding: '10px', background: 'white', border: '1px solid #94a3b8', borderRadius: '6px', fontSize: '0.9rem', color: '#334155', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '500', transition: 'all 0.2s' }}>
+                <button 
+                  onClick={() => {
+                    const count = promoSuccessDetails.affectedCount || 1;
+                    const target = promoSuccessDetails.target || 'Product';
+                    let csvContent = "data:text/csv;charset=utf-8,SKU,Category,Name\n";
+                    for (let i = 1; i <= count; i++) {
+                      csvContent += `PRD-${target.replace(/\\s+/g, '')}-${i},${target},Product ${i}\n`;
+                    }
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", `affected_products_${target.replace(/\\s+/g, '_')}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  style={{ width: '100%', padding: '10px', background: 'white', border: '1px solid #94a3b8', borderRadius: '6px', fontSize: '0.9rem', color: '#334155', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '500', transition: 'all 0.2s' }}
+                >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                   Download Excel List ({promoSuccessDetails.affectedCount || 1})
                 </button>
                 <button style={{ width: '100%', padding: '10px', background: '#b90e1c', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 'bold', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(185, 14, 28, 0.2)' }} onClick={() => {
                   setPromoSuccessDetails(null);
-                  window.location.href = '/admin/promotions';
+                  navigate('/promotions');
                 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
                   View list in Promotion Admin
