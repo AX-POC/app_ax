@@ -111,11 +111,39 @@ async function executeManageEntity(modelName, args) {
 
 exports.chat = async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, agent } = req.body;
     if (!message) return res.status(400).json({ error: 'Message is required' });
 
-    // --- Hardcoded Scenarios ---
     const lowerMessage = message.toLowerCase();
+
+    // 0. Intent Routing (Redirect to specialized agent)
+    let targetAgent = agent;
+    if (lowerMessage.includes('coupon') || lowerMessage.includes('쿠폰') || lowerMessage.includes('discount') || lowerMessage.includes('할인') || lowerMessage.includes('campaign')) {
+      targetAgent = 'promotion';
+    } else if (lowerMessage.includes('pto') || lowerMessage.includes('pick to order') || lowerMessage.includes('bundle')) {
+      targetAgent = 'product';
+    } else if (lowerMessage.includes('order') || lowerMessage.includes('delivery') || lowerMessage.includes('배송') || lowerMessage.includes('주문') || lowerMessage.includes('picking')) {
+      targetAgent = 'order';
+    } else if (lowerMessage.includes('deploy') || lowerMessage.includes('storefront') || lowerMessage.includes('스토어') || lowerMessage.includes('사이트')) {
+      targetAgent = 'rollout';
+    } else if (lowerMessage.includes('security') || lowerMessage.includes('threat') || lowerMessage.includes('scan') || lowerMessage.includes('보안')) {
+      targetAgent = 'security';
+    }
+
+    if (targetAgent && agent && targetAgent !== agent) {
+      const agentName = targetAgent.charAt(0).toUpperCase() + targetAgent.slice(1) + ' Agent';
+      return res.json({
+        type: 'action',
+        text: `It looks like you need help with that. I will redirect you to the ${agentName} who specializes in this area.`,
+        action: {
+          type: 'CHANGE_AGENT',
+          payload: targetAgent,
+          originalMessage: message
+        }
+      });
+    }
+
+    // --- Hardcoded Scenarios ---
     
     if (lowerMessage.includes('proactive targeted discount coupon')) {
       return res.json({

@@ -216,7 +216,6 @@ export default function PromotionManage() {
     { id: 'coupon', label: '🎟️ Coupon Management' },
     { id: 'timesale', label: '⏱️ Timesale Management' },
     { id: 'preorder', label: '📦 Pre-order Management' },
-    { id: 'pto', label: '🎁 PTO Bundle Management' },
     { id: 'addon', label: '➕ Add-on Bundle Management' },
   ];
 
@@ -487,57 +486,6 @@ export default function PromotionManage() {
           </>
         )}
 
-        {/* 4. PTO Bundle Management */}
-        {activeTab === 'pto' && (
-          <>
-            <h2>PTO Bundle (Pick Two Options)</h2>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Group two distinct items to offer a special bundle price.</p>
-            <form onSubmit={handleCreatePtoBundle} className="product-form" style={{ marginBottom: '2rem' }}>
-              <div className="form-group">
-                <label>Bundle Name</label>
-                <input type="text" value={ptoForm.name} onChange={e => setPtoForm({...ptoForm, name: e.target.value})} placeholder="e.g. Essential Work Set" required />
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Product 1</label>
-                  <select value={ptoForm.productId1} onChange={e => setPtoForm({...ptoForm, productId1: e.target.value})} required>
-                    <option value="">-- Select Product 1 --</option>
-                    {products.map(p => <option key={p.id} value={p.id}>{p.name} (${p.price})</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Product 2</label>
-                  <select value={ptoForm.productId2} onChange={e => setPtoForm({...ptoForm, productId2: e.target.value})} required>
-                    <option value="">-- Select Product 2 --</option>
-                    {products.map(p => <option key={p.id} value={p.id}>{p.name} (${p.price})</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="form-group">
-                <label>Special Bundle Price ($)</label>
-                <input type="number" value={ptoForm.bundlePrice} onChange={e => setPtoForm({...ptoForm, bundlePrice: e.target.value})} placeholder="e.g. 150" required />
-              </div>
-              <button type="submit" className="btn-primary">Create PTO Bundle</button>
-            </form>
-
-            <div className="table-wrapper">
-              <table className="product-table">
-                <thead><tr><th>Bundle Name</th><th>Product 1</th><th>Product 2</th><th>Bundle Price</th></tr></thead>
-                <tbody>
-                  {ptoBundles.map(b => (
-                    <tr key={b.id}>
-                      <td className="fw-bold">{b.name}</td>
-                      <td>{getProductName(b.productId1)}</td>
-                      <td>{getProductName(b.productId2)}</td>
-                      <td style={{ color: 'var(--warning)', fontWeight: 'bold' }}>${b.bundlePrice}</td>
-                    </tr>
-                  ))}
-                  {ptoBundles.length === 0 && <tr><td colSpan={4} className="text-center">No bundles found.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
 
         {/* 5. Add-on Bundle Management */}
         {activeTab === 'addon' && (

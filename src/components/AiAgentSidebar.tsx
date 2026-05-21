@@ -29,7 +29,7 @@ const agents = [
     id: 'rollout',
     name: 'Rollout Agent',
     desc: 'Instantly spins up new global storefronts.',
-    avatar: '/agents/rollout_lop_rabbit.png',
+    avatar: '/agents/rollout_cheetah.png',
     suggestions: ['스페인 사이트 열어줘', 'Deploy UK Store']
   },
 
@@ -186,6 +186,7 @@ function OrderIssuesForm({ onResolveErrors, onNotifyScm }: { onResolveErrors: (i
 
 export default function AiAgentSidebar() {
   const [isOpen, setIsOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(420);
   const [view, setView] = useState<'dashboard' | 'chat'>('dashboard');
   const [activeAgent, setActiveAgent] = useState<any>(null);
   const [activePromotions, setActivePromotions] = useState<any[]>([]);
@@ -378,15 +379,19 @@ export default function AiAgentSidebar() {
 
   const COMMERCE_API = '';
 
-  const submitMessage = async (text: string) => {
+  const submitMessage = async (text: string, overrideAgentId?: string) => {
     if (!text.trim()) return;
 
-    setMessages(prev => [...prev, { role: 'user', type: 'text', content: text }]);
-    setInputText('');
+    if (!overrideAgentId) {
+      setMessages(prev => [...prev, { role: 'user', type: 'text', content: text }]);
+      setInputText('');
+    }
     setIsTyping(true);
 
+    const currentAgentId = overrideAgentId || activeAgent?.id;
+
     // Instant navigation for PTO flow
-    if (activeAgent?.id === 'product' && (text.toLowerCase().includes('pto') || text.toLowerCase().includes('pick to order') || text.toLowerCase().includes('create pto model'))) {
+    if (currentAgentId === 'product' && (text.toLowerCase().includes('pto') || text.toLowerCase().includes('pick to order') || text.toLowerCase().includes('create pto model'))) {
       localStorage.removeItem('pending-ai-promo');
       if (window.location.pathname !== '/preview') {
          navigate('/preview');
@@ -394,7 +399,7 @@ export default function AiAgentSidebar() {
     }
 
     // Security Agent 명령 처리
-    if (activeAgent?.id === 'security') {
+    if (currentAgentId === 'security') {
       const lower = text.toLowerCase();
       try {
         if (lower.includes('ddos')) {
@@ -469,7 +474,7 @@ export default function AiAgentSidebar() {
 
 
     // Natural Language local parser for promotion coupon creation
-    if (activeAgent?.id === 'promotion') {
+    if (currentAgentId === 'promotion') {
       const lower = text.toLowerCase();
       
       if (lower.includes('end') || lower.includes('stop')) {
@@ -545,7 +550,7 @@ export default function AiAgentSidebar() {
       const response = await fetch('/api/agent/chat', { 
          method: 'POST', 
          headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ message: text, agent: activeAgent.id, activePromotions }) 
+         body: JSON.stringify({ message: text, agent: currentAgentId, activePromotions }) 
       });
       const data = await response.json();
       setIsTyping(false);
@@ -584,6 +589,20 @@ export default function AiAgentSidebar() {
             setTimeout(() => navigate(data.action.payload), 1000);
           } else if (data.action.type === 'REFRESH_DATA') {
             setTimeout(() => window.location.reload(), 1500);
+          } else if (data.action.type === 'CHANGE_AGENT') {
+            setTimeout(() => {
+              const nextAgent = agents.find(a => a.id === data.action.payload);
+              if (nextAgent) {
+                setActiveAgent(nextAgent);
+                const targetPage = agentPageMap[nextAgent.id];
+                if (targetPage && window.location.pathname !== targetPage) {
+                   navigate(targetPage);
+                }
+                if (data.action.originalMessage) {
+                  setTimeout(() => submitMessage(data.action.originalMessage, nextAgent.id), 500);
+                }
+              }
+            }, 2000);
           }
         }
       }
@@ -853,7 +872,37 @@ export default function AiAgentSidebar() {
           </div>
         </div>
       )}
-      <div className={`ai-sidebar-container ${isOpen ? 'open' : ''}`}>
+      <div 
+        className={`ai-sidebar-container ${isOpen ? 'open' : ''}`}
+        style={{ width: isOpen ? `${sidebarWidth}px` : 'var(--ai-sidebar-width)', position: 'relative', transition: isDragging ? 'none' : 'width 0.3s ease' }}
+      >
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault();
+            const startX = e.clientX;
+            const startWidth = sidebarWidth;
+            setIsDragging(true);
+            const onMouseMove = (moveEvent: MouseEvent) => {
+              const newWidth = Math.max(320, Math.min(900, startWidth + (moveEvent.clientX - startX)));
+              setSidebarWidth(newWidth);
+            };
+            const onMouseUp = () => {
+              document.removeEventListener('mousemove', onMouseMove);
+              document.removeEventListener('mouseup', onMouseUp);
+              document.body.style.cursor = 'default';
+              setIsDragging(false);
+            };
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = 'col-resize';
+          }}
+          style={{
+            position: 'absolute', top: 0, right: -4, width: '8px', height: '100%',
+            cursor: 'col-resize', zIndex: 1000, background: 'transparent', transition: 'background 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(165,0,52,0.2)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+        />
         <div className="ai-header">
         <div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--lg-black)' }}>LG AI Agents</h2>
@@ -2018,14 +2067,14 @@ function PtoCreationForm({ onSubmit }: { onSubmit: (name: string, sku: string, p
          <button 
            type="button" 
            onClick={() => setActiveTab('current')} 
-           style={{ flex: 1, minWidth: '110px', fontSize: '0.7rem', padding: '6px', borderRadius: '4px', border: '1px solid #ccc', background: activeTab === 'current' ? 'var(--lg-red)' : '#fff', color: activeTab === 'current' ? '#fff' : '#333', cursor: 'pointer' }}
+           style={{ flex: '1 1 0', minWidth: 0, fontSize: '0.7rem', padding: '6px', borderRadius: '4px', border: '1px solid #ccc', background: activeTab === 'current' ? 'var(--lg-red)' : '#fff', color: activeTab === 'current' ? '#fff' : '#333', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', lineHeight: '1.2' }}
          >
            Current Page ({currentPageProducts.length})
          </button>
          <button 
            type="button" 
            onClick={() => setActiveTab('browse')} 
-           style={{ flex: 1, minWidth: '110px', fontSize: '0.7rem', padding: '6px', borderRadius: '4px', border: '1px solid #ccc', background: activeTab === 'browse' ? 'var(--lg-red)' : '#fff', color: activeTab === 'browse' ? '#fff' : '#333', cursor: 'pointer' }}
+           style={{ flex: '1 1 0', minWidth: 0, fontSize: '0.7rem', padding: '6px', borderRadius: '4px', border: '1px solid #ccc', background: activeTab === 'browse' ? 'var(--lg-red)' : '#fff', color: activeTab === 'browse' ? '#fff' : '#333', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', lineHeight: '1.2' }}
          >
            Browse Full Catalog
          </button>
