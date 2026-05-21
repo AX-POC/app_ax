@@ -366,7 +366,8 @@ export default function StorePreview() {
               <button 
                 onClick={() => {
                   setShowPublishModal(false);
-                  window.open(`http://localhost:4321/${locale}/`, '_blank');
+                  const baseUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:4321' : (import.meta.env.VITE_STOREFRONT_URL || 'https://lg-ai-commerce.jeongbo83.workers.dev');
+                  window.open(`${baseUrl}/${locale}/`, '_blank');
                 }}
                 style={{
                   padding: '0.75rem 1.5rem', background: 'linear-gradient(135deg, #E81123, #b90e1c)', color: 'white',
