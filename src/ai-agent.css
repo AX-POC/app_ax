@@ -21,7 +21,7 @@
 /* Base styles for the sidebar */
 .ai-sidebar-container {
   width: var(--ai-sidebar-width);
-  height: 100%;
+  height: 111.112vh;
   background: var(--ai-bg);
   box-shadow: var(--ai-shadow);
   display: flex;
