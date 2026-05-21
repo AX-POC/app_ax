@@ -47,7 +47,7 @@ export default function AdminLayout() {
   const isSuperAdmin = adminRole === 'SUPER_ADMIN';
   console.log(isSuperAdmin);
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
+    <div style={{ display: 'flex', height: '111.111vh', width: '111.111vw', overflow: 'hidden', transform: 'scale(0.9)', transformOrigin: 'top left' }}>
       {/* 🚀 AI Agent Sidebar on the left 🚀 */}
       <AiAgentSidebar />
 
