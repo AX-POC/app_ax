@@ -21,7 +21,7 @@
 /* Base styles for the sidebar */
 .ai-sidebar-container {
   width: var(--ai-sidebar-width);
-  height: 100vh;
+  height: 100%;
   background: var(--ai-bg);
   box-shadow: var(--ai-shadow);
   display: flex;
@@ -123,11 +123,11 @@
   border-bottom: 1px solid var(--lg-border);
   margin-bottom: 24px;
   position: sticky;
-  top: -24px; /* match parent padding */
+  top: 0;
   background: var(--lg-white);
   z-index: 50;
-  padding: 24px 20px 16px;
-  margin: -24px -20px 24px -20px;
+  padding: 24px 24px 16px 24px;
+  margin: -24px -24px 24px -24px;
 }
 
 .back-btn {
@@ -288,6 +288,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .ai-suggestions-container {
