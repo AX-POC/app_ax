@@ -304,7 +304,7 @@ export default function StorePreview() {
             </div>
             <iframe 
               id="store-preview-iframe"
-              src={`${(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:4321' : (import.meta.env.VITE_STOREFRONT_URL || 'https://lg-ai-commerce.jeongbo83.workers.dev')}/${locale}/${categoryId ? 'products?categoryId=' + categoryId : ''}`}
+              src={`${import.meta.env.VITE_STOREFRONT_URL || 'https://lg-ai-commerce.jeongbo83.workers.dev'}/${locale}/${categoryId ? 'products?categoryId=' + categoryId : ''}`}
               title="Storefront Live Preview"
               style={{ width: '100%', flex: 1, border: 'none', background: '#fff' }}
               onLoad={(e) => {
@@ -366,7 +366,7 @@ export default function StorePreview() {
               <button 
                 onClick={() => {
                   setShowPublishModal(false);
-                  const baseUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:4321' : (import.meta.env.VITE_STOREFRONT_URL || 'https://lg-ai-commerce.jeongbo83.workers.dev');
+                  const baseUrl = import.meta.env.VITE_STOREFRONT_URL || 'https://lg-ai-commerce.jeongbo83.workers.dev';
                   window.open(`${baseUrl}/${locale}/`, '_blank');
                 }}
                 style={{
