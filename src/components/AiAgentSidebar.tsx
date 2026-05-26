@@ -1552,7 +1552,7 @@ export default function AiAgentSidebar() {
                             type: 'PTO_CREATE',
                             ...msg.actionDetails
                           }));
-                          navigate(`/preview${msg.actionDetails.categoryId ? '?categoryId=' + msg.actionDetails.categoryId : ''}`);
+                          window.location.href = `/preview${msg.actionDetails.categoryId ? '?categoryId=' + msg.actionDetails.categoryId : ''}`;
                         }}>👀 Live Preview</button>
                         <button className="action-btn approve" style={{ background: 'var(--lg-red)' }} onClick={async () => {
                           try {
